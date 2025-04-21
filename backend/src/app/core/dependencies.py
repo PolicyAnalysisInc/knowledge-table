@@ -1,7 +1,6 @@
 """Dependencies for the application."""
 
 from fastapi import Depends
-from typing import Optional
 
 from app.core.config import Settings, get_settings
 from app.services.document_service import DocumentService
@@ -11,12 +10,6 @@ from app.services.llm.base import CompletionService
 from app.services.llm.factory import CompletionServiceFactory
 from app.services.vector_db.base import VectorDBService
 from app.services.vector_db.factory import VectorDBFactory
-from app.services.s3_service import S3Service
-from app.services.metadata_service import MetadataService
-
-# Singletons for services that manage external connections
-_s3_service_instance: Optional[S3Service] = None
-_metadata_service_instance: Optional[MetadataService] = None
 
 
 def get_llm_service(
@@ -59,35 +52,10 @@ def get_vector_db_service(
     return vector_db_service
 
 
-def get_s3_service(settings: Settings = Depends(get_settings)) -> Optional[S3Service]:
-    """Get the S3 service singleton."""
-    global _s3_service_instance
-    if _s3_service_instance is None:
-        _s3_service_instance = S3Service(settings)
-    return _s3_service_instance
-
-
-def get_metadata_service(settings: Settings = Depends(get_settings)) -> Optional[MetadataService]:
-    """Get the Metadata service singleton."""
-    global _metadata_service_instance
-    if _metadata_service_instance is None:
-        _metadata_service_instance = MetadataService(settings)
-    # TODO: Consider adding logic to handle MongoDB connection closing on shutdown
-    return _metadata_service_instance
-
-
 def get_document_service(
     settings: Settings = Depends(get_settings),
     vector_db_service: VectorDBService = Depends(get_vector_db_service),
     llm_service: CompletionService = Depends(get_llm_service),
-    s3_service: Optional[S3Service] = Depends(get_s3_service),
-    metadata_service: Optional[MetadataService] = Depends(get_metadata_service),
 ) -> DocumentService:
     """Get the document service for the application."""
-    return DocumentService(
-        vector_db_service=vector_db_service,
-        llm_service=llm_service,
-        settings=settings,
-        s3_service=s3_service,
-        metadata_service=metadata_service,
-    )
+    return DocumentService(vector_db_service, llm_service, settings)
