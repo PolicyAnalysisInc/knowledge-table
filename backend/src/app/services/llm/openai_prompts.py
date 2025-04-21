@@ -2,9 +2,31 @@
 
 from string import Template
 
+_CITATION_INSTRUCTIONS = """
+**Output Format Instructions**:
+
+- Respond with a **JSON object** containing two fields: "answer" and "cited_chunk_indices".
+- The "answer" field should contain your answer to the **Question**, strictly following the specific format instructions provided below (e.g., boolean, string, integer array). Base the answer **only** on the provided **Context**. If the answer cannot be determined from the context, the "answer" field should be exactly `None`.
+- The "cited_chunk_indices" field should be a JSON array of integers. Each integer must be the 0-based index of a chunk from the **Context** that was **essential** for formulating the answer (e.g., `[0, 2]`). The chunks in the Context are clearly marked like `--- Chunk 0 (Page: X) ---`.
+- **Strict Citation Criteria**: Only include the index of a chunk if:
+    - The chunk **directly contains the answer** or a significant part of the answer.
+    - OR the chunk provides **essential context or information** without which the answer could not have been accurately determined or formulated based *solely* on the provided Context.
+- Do **NOT** cite chunks that merely provide background information or were scanned but ultimately not used for the final answer.
+- If no specific chunks meet these strict criteria (e.g., the answer is `None`, derived from general understanding across multiple chunks without specific reliance, or the context doesn't support an answer), provide an empty array `[]` or `null` for "cited_chunk_indices".
+- Do not include any introductory or concluding remarks, markdown formatting, or explanations outside the JSON object.
+
+Example JSON Response:
+```json
+{
+  "answer": "Example answer based on format rules",
+  "cited_chunk_indices": [1, 3]
+}
+```
+"""
+
 BASE_PROMPT = Template(
-    """
-You are an expert assistant whose job is to answer the following question using **only** the information provided in the **Context**. Do not use any prior knowledge or external information.
+    f"""
+You are an expert assistant whose job is to answer the following question using **only** the information provided in the **Context**. Do not use any prior knowledge or external information. Follow the output format instructions precisely.
 
 ---
 
@@ -17,16 +39,17 @@ $chunks
 
 ---
 
+{_CITATION_INSTRUCTIONS}
+
+---
+
+**Specific Format Instructions for the "answer" field**:
+
 $format_specific_instructions
 
-**Instructions**:
+---
 
-- Provide your answer based strictly on the given context.
-- Be concise and accurate.
-- Do not include any introductory or concluding remarks.
-- If the answer is not present in the context, respond exactly with "None".
-
-**Answer**:
+**JSON Response**:
 """
 )
 

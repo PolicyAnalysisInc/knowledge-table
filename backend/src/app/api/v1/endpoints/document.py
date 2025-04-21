@@ -57,8 +57,11 @@ async def upload_document_endpoint(
     )
 
     try:
+        file_content = await file.read()
         document_id = await document_service.upload_document(
-            file.filename, await file.read()
+            filename=file.filename,
+            file_content=file_content,
+            content_type=file.content_type,
         )
 
         if document_id is None:

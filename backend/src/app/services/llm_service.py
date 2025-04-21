@@ -2,10 +2,13 @@
 
 import json
 import logging
-from typing import Any, List, Tuple, Type, Union
+from typing import Any, List, Optional, Tuple, Type, Union
+from app.models.query_core import Chunk, FormatType, Rule
 
 from app.models.llm_responses import (
+    BaseResponseModel,
     BoolResponseModel,
+    CitedResponseWrapper,
     IntArrayResponseModel,
     IntResponseModel,
     KeywordsResponseModel,
@@ -14,7 +17,6 @@ from app.models.llm_responses import (
     StrResponseModel,
     SubQueriesResponseModel,
 )
-from app.models.query_core import FormatType, Rule
 from app.models.table import Table
 from app.services.llm.base import CompletionService
 from app.services.llm.openai_prompts import (
@@ -31,6 +33,16 @@ from app.services.llm.openai_prompts import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _format_chunks_for_prompt(chunks: List[Chunk]) -> str:
+    """Formats a list of Chunks into a string with indices for the LLM prompt."""
+    if not chunks:
+        return "No context provided."
+    return "\n\n".join(
+        f"--- Chunk {i} (Page: {chunk.page}) ---\n{chunk.content}"
+        for i, chunk in enumerate(chunks)
+    )
 
 
 def _get_model_and_instructions(
@@ -102,7 +114,7 @@ def _get_model_and_instructions(
 async def generate_response(
     llm_service: CompletionService,
     query: str,
-    chunks: str,
+    input_chunks: List[Chunk],
     rules: list[Rule],
     format: FormatType,
 ) -> dict[str, Any]:
@@ -115,8 +127,8 @@ async def generate_response(
         The language model service to use for generating the response.
     query : str
         The user's query to be answered.
-    chunks : str
-        The context or relevant text chunks for answering the query.
+    input_chunks : List[Chunk]
+        The list of context chunks retrieved for answering the query.
     rules : list[Rule]
         A list of rules to apply when generating the response.
     format : Literal["int", "str", "bool", "int_array", "str_array"]
@@ -125,33 +137,54 @@ async def generate_response(
     Returns
     -------
     dict[str, Any]
-        A dictionary containing the generated answer or None if an error occurs.
+        A dictionary containing the generated answer and the indices of cited chunks,
+        or None for the answer if an error occurs. Indices are relative to input_chunks.
     """
     logger.info(f"Generating response for query: {query} in format: {format}")
 
-    output_model, format_specific_instructions = _get_model_and_instructions(
+    answer_validation_model, format_specific_instructions = _get_model_and_instructions(
         format, rules, query
     )
 
+    formatted_chunks_str = _format_chunks_for_prompt(input_chunks)
+
     prompt = BASE_PROMPT.substitute(
         query=query,
-        chunks=chunks,
+        chunks=formatted_chunks_str,
         format_specific_instructions=format_specific_instructions,
     )
 
     try:
-        response = await llm_service.generate_completion(prompt, output_model)
-        logger.info(f"Raw response from LLM: {response}")
+        response_wrapper = await llm_service.generate_completion(
+            prompt, CitedResponseWrapper
+        )
+        logger.info(f"Raw wrapper response from LLM: {response_wrapper}")
 
-        if response is None or response.answer is None:
-            logger.warning("LLM returned None response")
-            return {"answer": None}
+        if response_wrapper is None:
+            logger.warning("LLM returned None response wrapper")
+            return {"answer": None, "cited_chunk_indices": None}
 
-        logger.info(f"Processed response: {response.answer}")
-        return {"answer": response.answer}
+        raw_answer = response_wrapper.answer
+        cited_indices = response_wrapper.cited_chunk_indices
+
+        validated_answer = None
+        if raw_answer is not None:
+            try:
+                temp_model_instance = answer_validation_model(answer=raw_answer)
+                validated_answer = temp_model_instance.answer
+                if validated_answer is None:
+                     logger.info("Answer validated to None.")
+            except ValueError as e:
+                logger.error(f"Error validating LLM answer part: {e}. Raw answer: {raw_answer}")
+                validated_answer = None
+
+        logger.info(f"Processed validated answer: {validated_answer}")
+        logger.info(f"Cited chunk indices returned by LLM: {cited_indices}")
+        return {"answer": validated_answer, "cited_chunk_indices": cited_indices}
+
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}", exc_info=True)
-        return {"answer": None}
+        return {"answer": None, "cited_chunk_indices": None}
 
 
 async def generate_inferred_response(

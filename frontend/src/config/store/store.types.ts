@@ -76,6 +76,7 @@ export interface AnswerTable {
   openedChunks: CellKey[];
   loadingCells: Record<CellKey, true>;
   uploadingFiles: boolean;
+  citedIndices: Record<CellKey, number[]>;
 }
 
 export interface AnswerTableColumn {

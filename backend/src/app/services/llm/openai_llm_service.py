@@ -1,13 +1,16 @@
 """OpenAI completion service implementation."""
 
 import logging
-from typing import Any, Optional, Type
+import json
+from typing import Any, Optional, Type, List
 
 from openai import OpenAI
-from pydantic import BaseModel
+from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings
 from app.services.llm.base import CompletionService
+from app.models.llm_responses import CitedResponseWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -35,30 +38,50 @@ class OpenAICompletionService(CompletionService):
             )
             return None
 
-        response = self.client.beta.chat.completions.parse(
-            model=self.settings.llm_model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format=response_model,
-        )
-
-        parsed_response = response.choices[0].message.parsed
-        logger.info(f"Generated response: {parsed_response}")
-
-        if parsed_response is None:
-            logger.warning("Received None response from OpenAI")
-            return None
-
+        response_content: Optional[str] = None
         try:
-            validated_response = response_model(**parsed_response.model_dump())
+            logger.debug(f"Sending prompt to LLM: {prompt}")
+            messages: List[ChatCompletionMessageParam] = [{"role": "user", "content": prompt}]
+
+            response_format_arg = None
+            if response_model == CitedResponseWrapper:
+                response_format_arg = {"type": "json_object"}
+                logger.debug("Requesting JSON object format from OpenAI.")
+
+            response: ChatCompletion = self.client.chat.completions.create(
+                model=self.settings.llm_model,
+                messages=messages,
+                response_format=response_format_arg,
+                temperature=0.0,
+            )
+
+            response_content = response.choices[0].message.content
+            logger.debug(f"Raw response content from OpenAI: {response_content}")
+
+            if response_content is None:
+                logger.warning("Received None content from OpenAI")
+                return None
+
+            parsed_data = json.loads(response_content)
+
+            validated_response = response_model(**parsed_data)
+            logger.info(f"Validated response: {validated_response.model_dump()}")
+
             if all(
                 value is None
                 for value in validated_response.model_dump().values()
             ):
                 logger.info("All fields in the response are None")
-                return None
             return validated_response
-        except ValueError as e:
-            logger.error(f"Error validating response: {e}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON response from OpenAI: {e}. Response content: {response_content}")
+            return None
+        except ValidationError as e:
+            logger.error(f"Error validating parsed JSON against Pydantic model {response_model.__name__}: {e}. Parsed data: {parsed_data}")
+            return None
+        except Exception as e:
+            logger.error(f"Error during LLM call or processing: {e}", exc_info=True)
             return None
 
     async def decompose_query(self, query: str) -> dict[str, Any]:

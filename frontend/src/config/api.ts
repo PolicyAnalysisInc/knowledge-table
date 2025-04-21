@@ -82,7 +82,8 @@ export const resolvedEntitiesSchema = z.union([
 const queryResponseSchema = z.object({
   answer: z.object({ answer: answerSchema }),
   chunks: z.array(chunkSchema),
-  resolved_entities: resolvedEntitiesSchema
+  resolved_entities: resolvedEntitiesSchema,
+  cited_chunk_indices: z.array(z.number()).nullish()
 });
 
 // Update the runQuery function to transform the data format
@@ -90,7 +91,7 @@ export async function runQuery(
   row: AnswerTableRow,
   column: AnswerTableColumn,
   globalRules: AnswerTableGlobalRule[]
-) {
+): Promise<z.infer<typeof queryResponseSchema>> {
   if (!column.entityType.trim() || !column.generate) {
     throw new Error(
       "Row or column doesn't allow running query (missing row source data or column is empty or has generate set to false)"
@@ -139,11 +140,7 @@ export async function runQuery(
   
   console.log('Transformed Resolved Entities:', resolvedEntities);
 
-  return {
-    answer: parsed.answer,
-    chunks: parsed.chunks,
-    resolvedEntities
-  };
+  return parsed;
 }
 
 // Export triples

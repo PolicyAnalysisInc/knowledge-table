@@ -76,6 +76,17 @@ class Settings(BaseSettings):
     # UNSTRUCTURED CONFIG
     unstructured_api_key: Optional[str] = None
 
+    # S3 CONFIG
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
+    aws_region: Optional[str] = None
+    s3_bucket_name: Optional[str] = None
+    s3_prefix: str = "original_documents/"
+
+    # MONGODB CONFIG
+    mongodb_uri: Optional[str] = None
+    mongodb_database: str = "knowledge_table_metadata"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

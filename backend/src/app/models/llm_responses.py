@@ -23,6 +23,40 @@ class BaseResponseModel(BaseModel):
         return v
 
 
+class CitedResponseWrapper(BaseModel):
+    """
+    A wrapper model for LLM responses that includes citations.
+    The LLM is expected to return JSON matching this structure.
+    """
+
+    answer: Any = Field(
+        description="The actual answer payload, conforming to the specific format requested (e.g., bool, str, list[int]). Needs secondary validation."
+    )
+    cited_chunk_indices: Optional[List[int]] = Field(
+        None,
+        description="A list of 0-based indices corresponding to the input chunks that were used to generate the answer.",
+    )
+
+    @field_validator("cited_chunk_indices", mode="before")
+    def validate_indices(cls, v: Any) -> Optional[List[int]]:
+        """Validate if the value is a list of integers or None."""
+        if v is None or v == "None" or (isinstance(v, list) and v == ["None"]):
+            return None
+        if isinstance(v, list):
+            try:
+                indices = [int(i) for i in v]
+                return indices
+            except (ValueError, TypeError):
+                logger.warning(
+                    f"Cited chunk indices contain non-integer values: {v}. Ignoring citations."
+                )
+                return None
+        logger.warning(
+            f"Cited chunk indices are not a list: {v}. Ignoring citations."
+        )
+        return None
+
+
 class BoolResponseModel(BaseResponseModel):
     """Pydantic model for validating boolean responses."""
 

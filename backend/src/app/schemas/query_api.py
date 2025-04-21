@@ -49,6 +49,7 @@ class QueryResult(BaseModel):
     answer: Any
     chunks: List[Chunk]
     resolved_entities: Optional[List[ResolvedEntitySchema]] = None
+    cited_chunk_indices: Optional[List[int]] = None
 
 
 class QueryResponseSchema(BaseModel):
@@ -79,6 +80,7 @@ class QueryAnswerResponse(BaseModel):
     answer: QueryAnswer
     chunks: List[Chunk]
     resolved_entities: Optional[List[ResolvedEntitySchema]] = None
+    cited_chunk_indices: Optional[List[int]] = None
 
 
 # Type for search responses (used in service layer)

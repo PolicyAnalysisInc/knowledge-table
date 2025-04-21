@@ -132,7 +132,8 @@ async def run_query(
         response_data = QueryAnswerResponse(
             answer=answer,
             chunks=query_response.chunks,
-            resolved_entities=query_response.resolved_entities,  # Add this line
+            resolved_entities=query_response.resolved_entities,
+            cited_chunk_indices=query_response.cited_chunk_indices
         )
 
         return response_data

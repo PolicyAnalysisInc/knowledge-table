@@ -22,6 +22,8 @@ class PDFLoader(LoaderService):
             loader = PyPDFLoader(file_path)
         elif file_extension == ".txt":
             loader = TextLoader(file_path)
+        elif file_extension == ".md":
+            loader = TextLoader(file_path)
         else:
             raise ValueError(f"Unsupported file type: {file_path}")
 

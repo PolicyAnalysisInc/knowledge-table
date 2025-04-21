@@ -400,7 +400,7 @@ export const useStore = create<Store>()(
           }
           if (shouldRunQuery) {
             // Inside runQuery.then callback in rerunCells:
-            runQuery(row, column, globalRules).then(({ answer, chunks, resolvedEntities }) => {
+            runQuery(row, column, globalRules).then(({ answer, chunks, resolvedEntities, cited_chunk_indices }) => {
               editCells(
                 [{ rowId: row.id, columnId: column.id, cell: answer.answer }],
                 activeTableId
@@ -430,6 +430,7 @@ export const useStore = create<Store>()(
               
               editTable(activeTableId, {
                 chunks: { ...currentTable.chunks, [key]: chunks },
+                citedIndices: { ...currentTable.citedIndices, [key]: cited_chunk_indices ?? [] },
                 loadingCells: omit(currentTable.loadingCells, key),
                 columns: currentTable.columns.map(col => ({
                   ...col,

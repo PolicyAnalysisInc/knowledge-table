@@ -22,7 +22,7 @@ async def test_process_query_decomposition(
         mock_vector_db_service.decomposed_search.return_value = {
             "chunks": [Chunk(content="Test content", page=1)]
         }
-        mock_generate_response.return_value = {"answer": "Test answer"}
+        mock_generate_response.return_value = {"answer": "Test answer", "cited_chunk_indices": [0]}
 
         result = await process_query(
             "decomposition",
@@ -37,6 +37,7 @@ async def test_process_query_decomposition(
         assert result == QueryResult(
             answer="Test answer",
             chunks=[Chunk(content="Test content", page=1)],
+            cited_chunk_indices=[0],
         )
         mock_vector_db_service.decomposed_search.assert_called_once_with(
             "test query", "doc_id", []
@@ -52,7 +53,7 @@ async def test_process_query_hybrid(mock_vector_db_service, mock_llm_service):
         mock_vector_db_service.hybrid_search.return_value = {
             "chunks": [Chunk(content="Test content", page=1)]
         }
-        mock_generate_response.return_value = {"answer": "Test answer"}
+        mock_generate_response.return_value = {"answer": "Test answer", "cited_chunk_indices": [0]}
 
         result = await process_query(
             "hybrid",
@@ -67,6 +68,7 @@ async def test_process_query_hybrid(mock_vector_db_service, mock_llm_service):
         assert result == QueryResult(
             answer="Test answer",
             chunks=[Chunk(content="Test content", page=1)],
+            cited_chunk_indices=[0],
         )
         mock_vector_db_service.hybrid_search.assert_called_once_with(
             "test query", "doc_id", []
@@ -91,7 +93,7 @@ async def test_process_query_simple_vector(
                 keywords=["test", "keyword"],
             )
         )
-        mock_generate_response.return_value = {"answer": "Test answer"}
+        mock_generate_response.return_value = {"answer": "Test answer", "cited_chunk_indices": [0]}
 
         result = await process_query(
             "simple_vector",
@@ -106,6 +108,7 @@ async def test_process_query_simple_vector(
         assert result == QueryResult(
             answer="Test answer",
             chunks=[Chunk(content="Test content", page=1)],
+            cited_chunk_indices=[0],
         )
 
         # Reset the mock and then check the call

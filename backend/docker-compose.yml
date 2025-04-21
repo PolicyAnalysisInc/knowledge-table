@@ -23,3 +23,25 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  mongodb:
+    image: mongo:latest
+    container_name: knowledge_table_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      # Add any necessary MongoDB environment variables here (e.g., user/password)
+      # MONGO_INITDB_ROOT_USERNAME: user
+      # MONGO_INITDB_ROOT_PASSWORD: password
+    networks:
+      - knowledge-table-network
+
+networks:
+  knowledge-table-network:
+    driver: bridge
+
+volumes:
+  milvus_data:
+  mongo_data:

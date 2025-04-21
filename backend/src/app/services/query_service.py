@@ -115,71 +115,72 @@ async def process_query(
     search_method = get_search_method(query_type, vector_db_service)
 
     search_response = await search_method(query, document_id, rules)
-    chunks = extract_chunks(search_response)
-    concatenated_chunks = " ".join(chunk.content for chunk in chunks)
-
-    answer = await generate_response(
-        llm_service, query, concatenated_chunks, rules, format
+    retrieved_chunks: List[Chunk] = (
+        search_response["chunks"]
+        if isinstance(search_response, dict)
+        else search_response.chunks
     )
-    answer_value = answer["answer"]
+
+    llm_result = await generate_response(
+        llm_service, query, retrieved_chunks, rules, format
+    )
+    answer_value = llm_result["answer"]
+    cited_indices = llm_result["cited_chunk_indices"]
+
+    logger.info(
+        f"Query processed. Answer: {answer_value}, Cited Indices: {cited_indices}, Retrieved Chunks: {len(retrieved_chunks)}"
+    )
 
     transformations: Dict[str, Union[str, List[str]]] = {
         "original": "",
         "resolved": "",
     }
 
-    result_chunks = []
-
-    if format in ["str", "str_array"]:
-
-        # Extract and apply keyword replacements from all resolve_entity rules
+    if answer_value is not None and format in ["str", "str_array"]:
         resolve_entity_rules = [
             rule for rule in rules if rule.type == "resolve_entity"
         ]
-
-        result_chunks = (
-            []
-            if answer_value in ("not found", None)
-            and query_type != "decomposition"
-            else chunks
-        )
-
-        # First populate the replacements dictionary
         replacements: Dict[str, str] = {}
-        if resolve_entity_rules and answer_value:
+        if resolve_entity_rules:
             for rule in resolve_entity_rules:
                 if rule.options:
-                    rule_replacements = dict(
-                        option.split(":") for option in rule.options
-                    )
-                    replacements.update(rule_replacements)
+                    try:
+                        rule_replacements = dict(
+                            option.split(":", 1) for option in rule.options
+                        )
+                        replacements.update(rule_replacements)
+                    except ValueError as e:
+                         logger.warning(f"Skipping invalid resolve_entity rule option in rule {rule}: {e}")
 
-            # Then apply the replacements if we have any
             if replacements:
                 print(f"Resolving entities in answer: {answer_value}")
+                transformed_value: Union[str, List[str]]
+                transform_dict: Dict[str, Union[str, List[str]]]
                 if isinstance(answer_value, list):
-                    transformed_list, transform_dict = replace_keywords(
-                        answer_value, replacements
-                    )
-                    transformations = transform_dict
-                    answer_value = transformed_list
-                else:
                     transformed_value, transform_dict = replace_keywords(
                         answer_value, replacements
                     )
-                    transformations = transform_dict
-                    answer_value = transformed_value
+                else:
+                    transformed_value, transform_dict = replace_keywords(
+                         str(answer_value) if not isinstance(answer_value, str) else answer_value,
+                         replacements
+                    )
+                transformations = transform_dict
+                answer_value = transformed_value
+
+    result_chunks_to_return = retrieved_chunks[:10]
 
     return QueryResult(
         answer=answer_value,
-        chunks=result_chunks[:10],
+        chunks=result_chunks_to_return,
+        cited_chunk_indices=cited_indices,
         resolved_entities=(
             [
                 ResolvedEntitySchema(
                     original=transformations["original"],
                     resolved=transformations["resolved"],
-                    source={"type": "column", "id": "some-id"},
-                    entityType="some-type",
+                    source={"type": "column", "id": "unknown-rule-source"},
+                    entityType="unknown-entity-type",
                 )
             ]
             if transformations["original"] or transformations["resolved"]
@@ -256,31 +257,62 @@ async def inference_query(
     llm_service: CompletionService,
 ) -> QueryResult:
     """Generate a response, no need for vector retrieval."""
-    # Since we are just answering this query based on data provided in the query,
-    # ther is no need to retrieve any chunks from the vector database.
-
-    answer = await generate_inferred_response(
+    logger.info("Processing inference query.")
+    answer_dict = await generate_inferred_response(
         llm_service, query, rules, format
     )
-    answer_value = answer["answer"]
+    answer_value = answer_dict["answer"]
 
-    # Extract and apply keyword replacements from all resolve_entity rules
-    resolve_entity_rules = [
-        rule for rule in rules if rule.type == "resolve_entity"
-    ]
-
-    if resolve_entity_rules and answer_value:
-        # Combine all replacements from all resolve_entity rules
+    transformations: Dict[str, Union[str, List[str]]] = {
+        "original": "",
+        "resolved": "",
+    }
+    if answer_value is not None and format in ["str", "str_array"]:
+        resolve_entity_rules = [
+            rule for rule in rules if rule.type == "resolve_entity"
+        ]
         replacements = {}
-        for rule in resolve_entity_rules:
-            if rule.options:
-                rule_replacements = dict(
-                    option.split(":") for option in rule.options
-                )
-                replacements.update(rule_replacements)
+        if resolve_entity_rules:
+            for rule in resolve_entity_rules:
+                if rule.options:
+                    try:
+                        rule_replacements = dict(
+                            option.split(":", 1) for option in rule.options
+                        )
+                        replacements.update(rule_replacements)
+                    except ValueError as e:
+                        logger.warning(f"Skipping invalid resolve_entity rule option in rule {rule}: {e}")
 
         if replacements:
-            print(f"Resolving entities in answer: {answer_value}")
-            answer_value = replace_keywords(answer_value, replacements)
+            print(f"Resolving entities in inferred answer: {answer_value}")
+            transformed_value: Union[str, List[str]]
+            transform_dict: Dict[str, Union[str, List[str]]]
+            if isinstance(answer_value, list):
+                transformed_value, transform_dict = replace_keywords(
+                    answer_value, replacements
+                )
+            else:
+                transformed_value, transform_dict = replace_keywords(
+                     str(answer_value) if not isinstance(answer_value, str) else answer_value,
+                     replacements
+                 )
+            transformations = transform_dict
+            answer_value = transformed_value
 
-    return QueryResult(answer=answer_value, chunks=[])
+    return QueryResult(
+        answer=answer_value,
+        chunks=[],
+        cited_chunk_indices=None,
+        resolved_entities=(
+             [
+                 ResolvedEntitySchema(
+                     original=transformations["original"],
+                     resolved=transformations["resolved"],
+                     source={"type": "column", "id": "unknown-rule-source"},
+                     entityType="unknown-entity-type",
+                 )
+             ]
+             if transformations["original"] or transformations["resolved"]
+             else None
+         )
+    )
