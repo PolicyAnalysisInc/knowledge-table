@@ -3,7 +3,7 @@
 import logging
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, validator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -11,6 +11,11 @@ logger = logging.getLogger(__name__)
 
 class BaseResponseModel(BaseModel):
     """Base class for response models with common validation logic."""
+
+    confidence: Optional[int] = Field(
+        default=None,
+        description="The confidence score of the LLM's response, from 1 (lowest) to 10 (highest)."
+    )
 
     @classmethod
     def validate_none(cls, v: Any) -> Optional[Any]:
@@ -21,6 +26,22 @@ class BaseResponseModel(BaseModel):
         ):
             return None
         return v
+
+    @validator("confidence", pre=True, always=True)
+    def validate_confidence(cls, v: Any) -> Optional[int]:
+        """Validate if the confidence score is an integer between 1 and 10 or None."""
+        if v is None or (isinstance(v, str) and v.lower() in ["none", "null"]):
+            return None
+        try:
+            confidence = int(v)
+            if 1 <= confidence <= 10:
+                return confidence
+            else:
+                logger.warning(f"Confidence score {confidence} out of range (1-10). Setting to None.")
+                return None
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid confidence score value: {v}. Setting to None.")
+            return None
 
 
 class BoolResponseModel(BaseResponseModel):
@@ -63,12 +84,37 @@ class IntResponseModel(BaseResponseModel):
             return None
         if isinstance(v, list) and len(v) == 1:
             v = v[0]
-        if isinstance(v, float):
-            raise ValueError("Must be an integer value, not a float")
+        # Explicitly check for float type that is not an integer
+        if isinstance(v, float) and not v.is_integer():
+             logger.warning(f"Received float ({v}) for integer field. Truncating.")
+             # Or raise ValueError("Must be an integer value, not a float") if strict
+             return int(v) # Or return None / raise error
         try:
             return int(v)
-        except ValueError:
+        except (ValueError, TypeError):
             raise ValueError("Must be an integer value or None")
+
+
+class NumberResponseModel(BaseResponseModel):
+    """Pydantic model for validating numeric (float) responses."""
+
+    answer: Optional[float] = Field(
+        description="The numeric (float) answer to the query"
+    )
+
+    @field_validator("answer", mode="before")
+    def validate_number(cls, v: Any) -> Optional[float]:
+        """Validate if the value is a float or None."""
+        v = cls.validate_none(v)
+        if v is None:
+            return None
+        if isinstance(v, list) and len(v) == 1:
+            v = v[0]
+        try:
+            # Attempt to convert to float
+            return float(v)
+        except (ValueError, TypeError):
+            raise ValueError("Must be a valid number (integer or float) or None")
 
 
 class ArrayResponseModel(BaseResponseModel):
@@ -105,17 +151,57 @@ class IntArrayResponseModel(ArrayResponseModel):
         cls, v: Any, info: ValidationInfo
     ) -> Optional[List[int]]:
         """Validate if the value is an integer array or None."""
-        int_rule = info.data.get("int_rule")
+        # Assuming rules might specify max_length for arrays
+        int_rule = info.context.get("int_rule") if info.context else None # Use context
         max_length = int_rule.length if int_rule else None
         v = cls.validate_array(v, max_length)
         if v is None:
             return None
         if isinstance(v, (int, float)):
-            v = [v]
-        try:
-            return [int(item) for item in v]
-        except ValueError:
-            raise ValueError("All items must be valid integers")
+             # Allow single number to be treated as a list
+             v = [v]
+        validated_list = []
+        for item in v:
+            try:
+                val = float(item) # Check if it's a number first
+                if not val.is_integer():
+                    logger.warning(f"Received float ({val}) in integer array. Truncating.")
+                    # Or raise ValueError / skip item
+                validated_list.append(int(val))
+            except (ValueError, TypeError):
+                 raise ValueError(f"Item '{item}' is not a valid integer")
+        return validated_list
+
+
+class NumberArrayResponseModel(ArrayResponseModel):
+    """Pydantic model for validating number (float) array responses."""
+
+    answer: Optional[List[float]] = Field(
+        description="The list of numeric (float) answers to the query"
+    )
+
+    @field_validator("answer", mode="before")
+    @classmethod
+    def validate_number_array(
+        cls, v: Any, info: ValidationInfo
+    ) -> Optional[List[float]]:
+        """Validate if the value is a number (float) array or None."""
+        # Assuming rules might specify max_length for arrays
+        int_rule = info.context.get("int_rule") if info.context else None # Use context
+        max_length = int_rule.length if int_rule else None
+        v = cls.validate_array(v, max_length)
+        if v is None:
+            return None
+        if isinstance(v, (int, float, str)):
+             # Allow single number/string to be treated as a list
+             v = [v]
+        validated_list = []
+        for item in v:
+            try:
+                validated_list.append(float(item))
+            except (ValueError, TypeError):
+                raise ValueError(f"Item '{item}' is not a valid number (integer or float)")
+        return validated_list
 
 
 class StrArrayResponseModel(ArrayResponseModel):
@@ -131,8 +217,9 @@ class StrArrayResponseModel(ArrayResponseModel):
         cls, v: Any, info: ValidationInfo
     ) -> Optional[List[str]]:
         """Validate if the value is a string array or None."""
-        str_rule = info.data.get("str_rule")
-        int_rule = info.data.get("int_rule")
+        # Use context instead of data for Pydantic v2 compatibility
+        str_rule = info.context.get("str_rule") if info.context else None
+        int_rule = info.context.get("int_rule") if info.context else None
         max_length = int_rule.length if int_rule else None
         v = cls.validate_array(v, max_length)
         if v is None:
@@ -162,7 +249,8 @@ class StrResponseModel(BaseResponseModel):
             v = v[0]
         if not isinstance(v, str):
             raise ValueError("Must be a string")
-        str_rule = info.data.get("str_rule")
+        # Use context instead of data
+        str_rule = info.context.get("str_rule") if info.context else None
         if (
             str_rule
             and str_rule.type == "must_return"

@@ -5,7 +5,9 @@ import {
   IconAlignJustified,
   IconCheckbox,
   IconHash,
-  TablerIcon
+  TablerIcon,
+  IconCheck,
+  IconList
 } from "@tabler/icons-react";
 import { AnswerTableColumn } from "@config/store";
 
@@ -14,11 +16,13 @@ export const typeOptions: {
   label: ReactNode;
   icon: TablerIcon;
 }[] = [
-  { value: "str", label: "Text", icon: IconAlignJustified },
-  { value: "str_array", label: "List of text", icon: IconAlignJustified },
-  { value: "int", label: "Number", icon: IconHash },
-  { value: "int_array", label: "List of numbers", icon: IconHash },
-  { value: "bool", label: "True / False", icon: IconCheckbox }
+  { value: "str", label: "Text", icon: IconList },
+  { value: "str_array", label: "List of text", icon: IconList },
+  { value: "int", label: "Integer", icon: IconHash },
+  { value: "number", label: "Number (float)", icon: IconHash },
+  { value: "int_array", label: "List of integers", icon: IconHash },
+  { value: "number_array", label: "List of numbers (float)", icon: IconHash },
+  { value: "bool", label: "True / False", icon: IconCheck }
 ];
 
 export const generateOptions: {

@@ -21,7 +21,7 @@ import {
   getCellKey,
   getInitialData,
   isArrayType,
-  toSingleType
+  getSingularType
 } from "./store.utils";
 import { AnswerTableRow, ResolvedEntity, SourceData, Store } from "./store.types";
 import { runQuery, uploadFile } from "../api";
@@ -153,7 +153,7 @@ export const useStore = create<Store>()(
         editActiveTable({
           rows: newRows,
           columns: where(columns, column => column.id === id, {
-            type: toSingleType(column.type)
+            type: getSingularType(column.type)
           })
         });
       },

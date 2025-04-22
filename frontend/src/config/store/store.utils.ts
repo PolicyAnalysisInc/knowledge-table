@@ -13,11 +13,20 @@ import {
 export const DEFAULT_COLUMN_WIDTH = 160;
 
 export function isArrayType(type: AnswerTableColumn["type"]) {
-  return type === "int_array" || type === "str_array";
+  return type === "int_array" || type === "str_array" || type === "number_array";
 }
 
-export function toSingleType(type: AnswerTableColumn["type"]) {
-  return type === "int_array" ? "int" : type === "str_array" ? "str" : type;
+export function getSingularType(type: AnswerTableColumn["type"]) {
+  switch (type) {
+    case "int_array":
+      return "int";
+    case "str_array":
+      return "str";
+    case "number_array":
+      return "number";
+    default:
+      return type;
+  }
 }
 
 export function getCellKey(
@@ -121,6 +130,13 @@ export function castToString(value: CellValue) {
   return String(value).trim() || undefined;
 }
 
+export function castToNumber(value: CellValue) {
+  const str = castToString(value);
+  if (isNil(str)) return str;
+  const num = parseFloat(str);
+  return isNaN(num) ? undefined : num;
+}
+
 export function castToBool(value: CellValue) {
   let str = castToString(value);
   if (isNil(str)) return str;
@@ -136,6 +152,16 @@ export function castToIntArray(value: CellValue) {
     .map(castToInt)
     .filter(v => !isNil(v));
   return isEmpty(intArrayValue) ? undefined : intArrayValue;
+}
+
+export function castToNumberArray(value: CellValue) {
+  const str = castToString(value);
+  if (isNil(str)) return str;
+  const numberArrayValue = str
+    .split(DELIMITER)
+    .map(castToNumber)
+    .filter((v): v is number => !isNil(v));
+  return isEmpty(numberArrayValue) ? undefined : numberArrayValue;
 }
 
 export function castToStrArray(value: CellValue) {
@@ -155,12 +181,16 @@ export function castToType(
   switch (type) {
     case "int":
       return castToInt(value);
+    case "number":
+      return castToNumber(value);
     case "str":
       return castToString(value);
     case "bool":
       return castToBool(value);
     case "int_array":
       return castToIntArray(value);
+    case "number_array":
+      return castToNumberArray(value);
     case "str_array":
       return castToStrArray(value);
   }

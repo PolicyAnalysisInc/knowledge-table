@@ -83,7 +83,7 @@ export interface AnswerTableColumn {
   width: number;
   hidden: boolean;
   entityType: string;
-  type: "int" | "str" | "bool" | "int_array" | "str_array";
+  type: "int" | "number" | "str" | "bool" | "int_array" | "number_array" | "str_array";
   generate: boolean;
   query: string;
   rules: AnswerTableRule[];

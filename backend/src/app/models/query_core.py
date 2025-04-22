@@ -55,4 +55,12 @@ class Answer(BaseModel):
 
 
 QueryType = Literal["decomposition", "hybrid", "simple_vector"]
-FormatType = Literal["int", "str", "bool", "int_array", "str_array"]
+FormatType = Literal[
+    "int",
+    "number",
+    "str",
+    "bool",
+    "int_array",
+    "number_array",
+    "str_array",
+]

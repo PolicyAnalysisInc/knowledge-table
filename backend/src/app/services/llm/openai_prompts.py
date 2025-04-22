@@ -2,9 +2,14 @@
 
 from string import Template
 
+# Shared confidence instruction snippet
+CONFIDENCE_INSTRUCTION = "- Include a `confidence` score (integer from 1 to 10, 1 being lowest confidence, 10 being highest) indicating how certain you are about the answer based *only* on the provided context."
+
 BASE_PROMPT = Template(
     """
 You are an expert assistant whose job is to answer the following question using **only** the information provided in the **Context**. Do not use any prior knowledge or external information.
+
+Your response MUST be a JSON object with two fields: 'answer' and 'confidence'.
 
 ---
 
@@ -24,30 +29,35 @@ $format_specific_instructions
 - Provide your answer based strictly on the given context.
 - Be concise and accurate.
 - Do not include any introductory or concluding remarks.
-- If the answer is not present in the context, respond exactly with "None".
+- If the answer is not present in the context, the 'answer' field should be exactly `null`.
+{confidence_instruction}
 
-**Answer**:
-"""
+**Answer** (JSON object with 'answer' and 'confidence' fields):
+""".format(confidence_instruction=CONFIDENCE_INSTRUCTION)
 )
 
 INFERRED_BASE_PROMPT = Template(
     """
-Answer the following question following the formatting instructions at the bottom. Do not include, quotes, formatting, or any explanation or extra information. Just answer the question.
+Answer the following question following the formatting instructions at the bottom. Do not include quotes, formatting, or any explanation or extra information. Just answer the question.
+
+Your response MUST be a JSON object with two fields: 'answer' and 'confidence'.
 
 **Question**: $query
-**Answer**:
 
 $format_specific_instructions
 
-"""
+{confidence_instruction}
+
+**Answer** (JSON object with 'answer' and 'confidence' fields):
+""".format(confidence_instruction=CONFIDENCE_INSTRUCTION)
 )
 
 BOOL_INSTRUCTIONS = """
 **Special Instructions for Boolean Questions**:
 
-- If the question is asking for a verification or requires a boolean answer, respond with True or False.
-- If you cannot answer the question, respond exactly with 'None'.
-- Do not provide any explanations or additional information.
+- If the question is asking for a verification or requires a boolean answer, the 'answer' field should contain `true` or `false`.
+- If you cannot answer the question, the 'answer' field should be exactly `null`.
+- Do not provide any explanations or additional information in the 'answer' field.
 """
 
 STR_ARRAY_INSTRUCTIONS = Template(
@@ -57,29 +67,31 @@ $int_rule_line
 
 **Special Instructions for String Responses**:
 
-- If the answer is a single string, provide a single string.
-- If multiple strings are required, provide them as a JSON array of strings.
-- If you cannot find an answer, respond exactly with 'None'.
-- Do not include any additional text or explanation.
+- If the answer is a single string, the 'answer' field should contain a single string.
+- If multiple strings are required, the 'answer' field should contain a JSON array of strings.
+- If you cannot find an answer, the 'answer' field should be exactly `null`.
+- Do not include any additional text or explanation in the 'answer' field.
 """
 )
 
-INT_ARRAY_INSTRUCTIONS = Template(
+NUMBER_ARRAY_INSTRUCTIONS = Template(
     """
 $int_rule_line
 
-**Special Instructions for Integer Responses**:
+**Special Instructions for Numeric Responses**:
 
-- If the answer is a single integer, provide the integer as a number.
-- If multiple integers are required, provide them as a JSON array of integers.
-- If you cannot find an answer, respond exactly with 'None'.
-- Do not include any additional text or explanation.
+- If the answer is a single number, the 'answer' field should contain the number.
+- If multiple numbers are required, the 'answer' field should contain a JSON array of numbers.
+- If you cannot find an answer, the 'answer' field should be exactly `null`.
+- Do not include any additional text or explanation in the 'answer' field.
 """
 )
 
 KEYWORD_PROMPT = Template(
     """
 You are tasked with extracting the most relevant keywords from the following query. Focus on the main nouns and verbs that capture the essence of the query.
+
+Your response MUST be a JSON object with two fields: 'keywords' and 'confidence'.
 
 ---
 
@@ -89,18 +101,21 @@ You are tasked with extracting the most relevant keywords from the following que
 
 **Instructions**:
 
-- Provide the keywords as a JSON array of strings.
+- Provide the keywords as a JSON array of strings in the 'keywords' field.
 - Ensure all words are in their base (lemmatized) form.
-- If you cannot extract any relevant keywords, respond exactly with 'None'.
-- Do not include any additional text or explanation.
+- If you cannot extract any relevant keywords, the 'keywords' field should be exactly `null`.
+- Do not include any additional text or explanation in the 'keywords' field.
+{confidence_instruction}
 
-**Keywords**:
-"""
+**Keywords** (JSON object with 'keywords' and 'confidence' fields):
+""".format(confidence_instruction=CONFIDENCE_INSTRUCTION)
 )
 
 SIMILAR_KEYWORDS_PROMPT = Template(
     """
 You are tasked with finding additional keywords that are semantically similar to the provided keywords, using only the **Context** below.
+
+Your response MUST be a JSON object with two fields: 'keywords' and 'confidence'.
 
 ---
 
@@ -115,18 +130,21 @@ $chunks
 
 **Instructions**:
 
-- Provide the similar keywords as a JSON array of strings.
+- Provide the similar keywords as a JSON array of strings in the 'keywords' field.
 - Only include words that are present in the context and are semantically related to the provided keywords.
-- If you cannot find any similar keywords in the context, respond exactly with 'None'.
-- Do not include any additional text or explanation.
+- If you cannot find any similar keywords in the context, the 'keywords' field should be exactly `null`.
+- Do not include any additional text or explanation in the 'keywords' field.
+{confidence_instruction}
 
-**Similar Keywords**:
-"""
+**Similar Keywords** (JSON object with 'keywords' and 'confidence' fields):
+""".format(confidence_instruction=CONFIDENCE_INSTRUCTION)
 )
 
 DECOMPOSE_QUERY_PROMPT = Template(
     """
 You are tasked with decomposing the following question into simpler, relevant sub-questions that capture different aspects of the original question.
+
+Your response MUST be a JSON object with two fields: 'sub_queries' and 'confidence'.
 
 ---
 
@@ -136,17 +154,20 @@ You are tasked with decomposing the following question into simpler, relevant su
 
 **Instructions**:
 
-- Provide up to 3 sub-questions as a JSON array of strings.
-- If the question is already simple or cannot be decomposed, respond exactly with 'None'.
-- Do not include any additional text or explanation.
+- Provide up to 3 sub-questions as a JSON array of strings in the 'sub_queries' field.
+- If the question is already simple or cannot be decomposed, the 'sub_queries' field should be exactly `null`.
+- Do not include any additional text or explanation in the 'sub_queries' field.
+{confidence_instruction}
 
-**Sub-Questions**:
-"""
+**Sub-Questions** (JSON object with 'sub_queries' and 'confidence' fields):
+""".format(confidence_instruction=CONFIDENCE_INSTRUCTION)
 )
 
 SCHEMA_PROMPT = Template(
     """
 Given the information about columns in a knowledge table, generate a schema that includes relationships between the columns if relevant.
+
+Your response MUST be a JSON object with two fields: 'relationships' and 'confidence'.
 
 ---
 
@@ -161,13 +182,14 @@ Given the information about columns in a knowledge table, generate a schema that
 **Instructions**:
 
 - Use **only** the exact column names provided in `$entity_types`.
-- For each relationship, create an object with `"head"`, `"relation"`, and `"tail"` fields.
+- For each relationship, create an object with `"head"`, `"relation"`, and `"tail"` fields. Place these relationship objects in a JSON array within the 'relationships' field.
 - The `"head"` and `"tail"` must be one of the provided column names.
 - Create meaningful `"relation"` names based on the column information and questions.
 - Do not use any names not in the provided column list.
-- If you cannot generate any meaningful relationships, respond exactly with `"None"`.
-- Do not include any additional text or explanation.
+- If you cannot generate any meaningful relationships, the 'relationships' field should be exactly `null`.
+- Do not include any additional text or explanation in the 'relationships' field.
+{confidence_instruction}
 
-**Schema Relationships**:
-"""
+**Schema Relationships** (JSON object with 'relationships' and 'confidence' fields):
+""".format(confidence_instruction=CONFIDENCE_INSTRUCTION)
 )

@@ -5,10 +5,13 @@ import logging
 from typing import Any, List, Tuple, Type, Union
 
 from app.models.llm_responses import (
+    BaseResponseModel,
     BoolResponseModel,
     IntArrayResponseModel,
     IntResponseModel,
     KeywordsResponseModel,
+    NumberArrayResponseModel,
+    NumberResponseModel,
     SchemaResponseModel,
     StrArrayResponseModel,
     StrResponseModel,
@@ -22,7 +25,7 @@ from app.services.llm.openai_prompts import (
     BOOL_INSTRUCTIONS,
     DECOMPOSE_QUERY_PROMPT,
     INFERRED_BASE_PROMPT,
-    INT_ARRAY_INSTRUCTIONS,
+    NUMBER_ARRAY_INSTRUCTIONS,
     KEYWORD_PROMPT,
     SCHEMA_PROMPT,
     SIMILAR_KEYWORDS_PROMPT,
@@ -35,18 +38,7 @@ logger = logging.getLogger(__name__)
 
 def _get_model_and_instructions(
     format: str, rules: list[Rule], query: str
-) -> Tuple[
-    Type[
-        Union[
-            BoolResponseModel,
-            IntArrayResponseModel,
-            IntResponseModel,
-            StrArrayResponseModel,
-            StrResponseModel,
-        ]
-    ],
-    str,
-]:
+) -> Tuple[Type[BaseResponseModel], str]:
     """
     Get the appropriate output model and instructions based on the format.
 
@@ -61,7 +53,7 @@ def _get_model_and_instructions(
 
     Returns
     -------
-    Tuple[Type[Union[BoolResponseModel, IntArrayResponseModel, IntResponseModel, StrArrayResponseModel, StrResponseModel]], str]
+    Tuple[Type[BaseResponseModel], str]
         A tuple containing the appropriate output model and format-specific instructions.
     """
     str_rule = next(
@@ -87,13 +79,23 @@ def _get_model_and_instructions(
         ), instructions
     elif format in ["int", "int_array"]:
         int_rule_line = _get_int_rule_line(int_rule)
-        instructions = INT_ARRAY_INSTRUCTIONS.substitute(
+        instructions = NUMBER_ARRAY_INSTRUCTIONS.substitute(
             int_rule_line=int_rule_line
         )
         return (
             IntArrayResponseModel
             if format == "int_array"
             else IntResponseModel
+        ), instructions
+    elif format in ["number", "number_array"]:
+        int_rule_line = _get_int_rule_line(int_rule)
+        instructions = NUMBER_ARRAY_INSTRUCTIONS.substitute(
+            int_rule_line=int_rule_line
+        )
+        return (
+            NumberArrayResponseModel
+            if format == "number_array"
+            else NumberResponseModel
         ), instructions
     else:
         raise ValueError(f"Unsupported format: {format}")
@@ -119,13 +121,13 @@ async def generate_response(
         The context or relevant text chunks for answering the query.
     rules : list[Rule]
         A list of rules to apply when generating the response.
-    format : Literal["int", "str", "bool", "int_array", "str_array"]
+    format : FormatType
         The desired format of the response.
 
     Returns
     -------
     dict[str, Any]
-        A dictionary containing the generated answer or None if an error occurs.
+        A dictionary containing the generated answer and confidence or None if an error occurs.
     """
     logger.info(f"Generating response for query: {query} in format: {format}")
 
@@ -143,15 +145,18 @@ async def generate_response(
         response = await llm_service.generate_completion(prompt, output_model)
         logger.info(f"Raw response from LLM: {response}")
 
-        if response is None or response.answer is None:
-            logger.warning("LLM returned None response")
-            return {"answer": None}
+        if response is None:
+            logger.warning("LLM returned None object")
+            return {"answer": None, "confidence": None}
 
-        logger.info(f"Processed response: {response.answer}")
-        return {"answer": response.answer}
+        # Return both answer and confidence
+        answer = getattr(response, 'answer', None)
+        confidence = getattr(response, 'confidence', None)
+        logger.info(f"Processed response: answer={answer}, confidence={confidence}")
+        return {"answer": answer, "confidence": confidence}
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}", exc_info=True)
-        return {"answer": None}
+        return {"answer": None, "confidence": None}
 
 
 async def generate_inferred_response(
@@ -171,13 +176,13 @@ async def generate_inferred_response(
         The user's query to be answered.
     rules : list[Rule]
         A list of rules to apply when generating the response.
-    format : Literal["int", "str", "bool", "int_array", "str_array"]
+    format : FormatType
         The desired format of the response.
 
     Returns
     -------
     dict[str, Any]
-        A dictionary containing the generated answer or None if an error occurs.
+        A dictionary containing the generated answer and confidence or None if an error occurs.
     """
     logger.info(
         f"Generating inferred response for query: {query} in format: {format}"
@@ -195,20 +200,23 @@ async def generate_inferred_response(
         response = await llm_service.generate_completion(prompt, output_model)
         logger.info(f"Raw response from LLM: {response}")
 
-        if response is None or response.answer is None:
-            logger.warning("LLM returned None response")
-            return {"answer": None}
+        if response is None:
+            logger.warning("LLM returned None object")
+            return {"answer": None, "confidence": None}
 
-        logger.info(f"Processed response: {response.answer}")
-        return {"answer": response.answer}
+        # Return both answer and confidence
+        answer = getattr(response, 'answer', None)
+        confidence = getattr(response, 'confidence', None)
+        logger.info(f"Processed response: answer={answer}, confidence={confidence}")
+        return {"answer": answer, "confidence": confidence}
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}", exc_info=True)
-        return {"answer": None}
+        return {"answer": None, "confidence": None}
 
 
 async def get_keywords(
     llm_service: CompletionService, query: str
-) -> dict[str, list[str] | None]:
+) -> dict[str, Any]:
     """
     Extract keywords from a query using the language model.
 
@@ -221,8 +229,8 @@ async def get_keywords(
 
     Returns
     -------
-    dict[str, list[str] | None]
-        A dictionary containing the extracted keywords or None if an error occurs.
+    dict[str, Any]
+        A dictionary containing the extracted keywords and confidence or None if an error occurs.
     """
     # Create the prompt
     prompt = KEYWORD_PROMPT.substitute(query=query)
@@ -232,13 +240,15 @@ async def get_keywords(
         response = await llm_service.generate_completion(
             prompt, KeywordsResponseModel
         )
-        keywords = response.keywords
+        keywords = getattr(response, 'keywords', None)
+        confidence = getattr(response, 'confidence', None)
         return {
-            "keywords": keywords if keywords and keywords != ["None"] else None
+            "keywords": keywords if keywords and keywords != ["None"] else None,
+            "confidence": confidence
         }
     except Exception as e:
         logger.error(f"Error extracting keywords: {e}")
-        return {"keywords": None}
+        return {"keywords": None, "confidence": None}
 
 
 async def get_similar_keywords(
@@ -259,7 +269,7 @@ async def get_similar_keywords(
     Returns
     -------
     dict[str, Any]
-        A dictionary containing the similar keywords found or None if an error occurs.
+        A dictionary containing the similar keywords found and confidence or None if an error occurs.
     """
     logger.info(
         f"Retrieving keywords which are similar to the provided keywords: {rule}"
@@ -277,13 +287,15 @@ async def get_similar_keywords(
         response = await llm_service.generate_completion(
             prompt, KeywordsResponseModel
         )
-        keywords = response.keywords
+        keywords = getattr(response, 'keywords', None)
+        confidence = getattr(response, 'confidence', None)
         return {
-            "keywords": keywords if keywords and keywords != ["None"] else None
+            "keywords": keywords if keywords and keywords != ["None"] else None,
+            "confidence": confidence
         }
     except Exception as e:
         logger.error(f"Error getting similar keywords: {e}")
-        return {"keywords": None}
+        return {"keywords": None, "confidence": None}
 
 
 async def decompose_query(
@@ -302,7 +314,7 @@ async def decompose_query(
     Returns
     -------
     dict[str, Any]
-        A dictionary containing the list of sub-queries or None if an error occurs.
+        A dictionary containing the list of sub-queries and confidence or None if an error occurs.
     """
     logger.info("Decomposing query into multiple sub-queries.")
 
@@ -315,17 +327,19 @@ async def decompose_query(
         response = await llm_service.generate_completion(
             prompt, SubQueriesResponseModel
         )
-        sub_queries = response.sub_queries
+        sub_queries = getattr(response, 'sub_queries', None)
+        confidence = getattr(response, 'confidence', None)
         return {
             "sub-queries": (
                 sub_queries
                 if sub_queries and sub_queries != ["None"]
                 else None
-            )
+            ),
+            "confidence": confidence
         }
     except Exception as e:
         logger.error(f"Error decomposing query: {e}")
-        return {"sub-queries": None}
+        return {"sub-queries": None, "confidence": None}
 
 
 async def generate_schema(
@@ -344,7 +358,7 @@ async def generate_schema(
     Returns
     -------
     dict[str, Any]
-        A dictionary containing the generated schema or None if an error occurs.
+        A dictionary containing the generated schema and confidence or None if an error occurs.
     """
     logger.info("Generating schema.")
 
@@ -369,7 +383,7 @@ async def generate_schema(
     # Ensure prepared_data["columns"] is a list
     if not isinstance(prepared_data["columns"], list):
         logger.error("prepared_data['columns'] is not a list")
-        return {"schema": None}
+        return {"schema": None, "confidence": None}
 
     entity_types: List[str] = [
         column["entity_type"] for column in prepared_data["columns"]
@@ -386,11 +400,19 @@ async def generate_schema(
         response = await llm_service.generate_completion(
             prompt, SchemaResponseModel
         )
-        schema = response.model_dump()
-        return {"schema": schema if schema.get("relationships") else None}
+        # Use getattr for safer access
+        schema_relationships = getattr(response, 'relationships', None)
+        confidence = getattr(response, 'confidence', None)
+        schema_dump = response.model_dump() if response else {}
+
+        return {
+             # Return the full dump including confidence, filtering relationships if needed
+            "schema": schema_dump if schema_relationships else None,
+            "confidence": confidence # Also return confidence separately if needed upstream
+            }
     except Exception as e:
         logger.error(f"Error generating schema: {e}")
-        return {"schema": None}
+        return {"schema": None, "confidence": None}
 
 
 def _get_str_rule_line(str_rule: Rule | None, query: str) -> str:

@@ -69,7 +69,7 @@ class QueryAnswer(BaseModel):
     id: str
     document_id: str
     prompt_id: str
-    answer: Optional[Union[int, str, bool, List[int], List[str]]]
+    answer: Optional[Union[int, float, str, bool, List[int], List[float], List[str]]]
     type: str
 
 
