@@ -17,16 +17,17 @@ class CompletionServiceFactory:
     @staticmethod
     def create_service(settings: Settings) -> Optional[CompletionService]:
         """Create a completion service based on the LLM_INTERFACE setting."""
-        # --- TEMPORARY PRINT --- #
-        # print(f"*** FACTORY CHECK: settings.llm_interface = '{settings.llm_interface}' ***") # Remove this line
-        # --- END TEMPORARY PRINT --- #
         # Read the interface setting, default to 'openai' if not set or empty
-        interface = getattr(settings, 'llm_interface', 'openai').lower()
+        interface = settings.llm_interface.lower() if settings.llm_interface else "openai"
         logger.info(f"Attempting to create completion service for interface: {interface}")
-        if interface == "openai":
+
+        if interface == "pydantic":
+            logger.info("Creating PydanticCompletionService.")
+            return PydanticCompletionService(settings) # Pass settings
+        elif interface == "openai":
+            logger.info("Creating OpenAICompletionService.")
             return OpenAICompletionService(settings)
-        elif interface == "pydantic":
-            return PydanticCompletionService(settings)
-        # Add more providers here when needed
-        logger.warning(f"Unsupported LLM interface specified: {interface}. Returning None.")
-        return None
+        else:
+            # Log a warning if the specified interface is unsupported, but still default to OpenAI
+            logger.warning(f"Unsupported LLM interface specified: '{settings.llm_interface}'. Defaulting to OpenAI.")
+            return OpenAICompletionService(settings) 

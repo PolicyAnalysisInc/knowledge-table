@@ -19,7 +19,7 @@ def get_llm_service(
     llm_service = CompletionServiceFactory.create_service(settings)
     if llm_service is None:
         raise ValueError(
-            f"Failed to create LLM service for provider: {settings.llm_provider}"
+            f"Failed to create LLM service for interface: {settings.llm_interface}"
         )
     return llm_service
 

@@ -5,7 +5,6 @@ SettingsConfigDict to load environment variables from a .env file.
 """
 
 import logging
-from functools import lru_cache
 from typing import List, Optional
 
 from pydantic import Field
@@ -52,6 +51,7 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o"
+    llm_interface: Optional[str] = "openai"
     openai_api_key: Optional[str] = None
 
     # VECTOR DATABASE CONFIG
@@ -85,7 +85,6 @@ class Settings(BaseSettings):
     )
 
 
-@lru_cache()
 def get_settings() -> Settings:
     """Get the settings for the application."""
     logger.info("Loading config settings from the environment...")

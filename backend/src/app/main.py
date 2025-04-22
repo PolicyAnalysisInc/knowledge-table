@@ -3,6 +3,7 @@
 import logging
 from typing import Any, Dict
 
+import logfire
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,6 +12,10 @@ from app.core.config import Settings, get_settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Configure Logfire
+logfire.configure()
+print("*** Logfire Configured in main.py ***")
 
 settings = get_settings()
 
