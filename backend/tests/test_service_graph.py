@@ -105,7 +105,9 @@ async def test_generate_triples(sample_table_data):
             SchemaRelationship(
                 head="Entity1", relation="relates_to", tail="Entity2"
             )
-        ]
+        ],
+        confidence=10,
+        reasoning="Test reasoning"
     )
     result = await generate_triples(schema, sample_table_data)
     assert isinstance(result, ExportTriplesResponseSchema)
@@ -174,7 +176,9 @@ async def test_process_table_and_generate_triples(
                     "relation": "relates_to",
                     "tail": "Entity2",
                 }
-            ]
+            ],
+            "confidence": 10,
+            "reasoning": "Mocked reasoning"
         }
     }
 

@@ -5,15 +5,18 @@ services:
     build: 
       context: .
       dockerfile: src/Dockerfile
-    command: uvicorn app.main:app --reload --workers 1 --host 0.0.0.0 --port 8000
+    # Command is now handled by ENTRYPOINT in Dockerfile
+    # command: uvicorn app.main:app --reload --workers 1 --host 0.0.0.0 --port 8000
     volumes:
       - ./src:/usr/src/app/src
       - ./pyproject.toml:/usr/src/app/pyproject.toml
+      - vector_db_data:/home/appuser/data
     ports:
       - 8000:8000
     environment:
       - ENVIRONMENT=dev
       - TESTING=0
+      - MILVUS_DB_URI=/home/appuser/data/milvus_demo.db
     env_file:
       - .env
     # Add healthcheck for better orchestration
@@ -23,3 +26,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+volumes:
+  vector_db_data:

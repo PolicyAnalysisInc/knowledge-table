@@ -32,12 +32,15 @@ class PydanticCompletionService(CompletionService):
         # Removed redundant settings checks, config loader handles errors.
 
         try:
-            # Get the currently active LLM configuration
+            # Get the currently active LLM configuration parameters
             active_config = get_active_llm_config()
-            llm_instance = active_config.llm
+            # Instantiate the LLM model on demand
+            llm_instance = active_config.get_instance() 
             llm_settings = active_config.settings
 
             if not llm_instance:
+                 # The get_instance method raises errors now, so this might be redundant,
+                 # but keep it for safety or if get_instance is changed later.
                  logger.error("Failed to load LLM instance from configuration.")
                  return None
 
@@ -64,6 +67,14 @@ class PydanticCompletionService(CompletionService):
                  logger.error(f"Extracted response is not of the expected type {response_model.__name__}. Got {type(actual_response).__name__}")
                  return None
 
+            # Check if all fields in the validated response are None
+            if all(
+                value is None
+                for value in actual_response.model_dump().values()
+            ):
+                logger.info("All fields in the response model are None. Returning None.")
+                return None
+
             return actual_response
         except Exception as e:
             logger.error(f"Error generating completion with Pydantic AI: {e}", exc_info=True)
@@ -76,7 +87,8 @@ class PydanticCompletionService(CompletionService):
         # This would involve getting the active config and instantiating an Agent
         # with SubQueriesResponseModel here, similar to generate_completion.
         # active_config = get_active_llm_config()
-        # agent = Agent(active_config.llm, output_type=SubQueriesResponseModel, instrument=True)
+        # llm_instance = active_config.get_instance() # Get instance here
+        # agent = Agent(llm_instance, output_type=SubQueriesResponseModel, instrument=True)
         # response = await agent.run(f"Decompose this query: {query}", **active_config.settings)
         # return response.output.model_dump() # Assuming SubQueriesResponseModel has a field like `sub_queries`
 

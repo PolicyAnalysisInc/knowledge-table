@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o"
     llm_interface: Optional[str] = "openai"
     openai_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
 
     # VECTOR DATABASE CONFIG
     vector_db_provider: str = "milvus"

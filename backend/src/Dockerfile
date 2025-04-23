@@ -45,11 +45,22 @@ RUN pip install --no-cache /wheels/*
 # Install the project
 RUN pip install -e .
 
-# Change ownership of the app directory
-RUN chown -R appuser:appuser /usr/src/app
+# Copy entrypoint script
+COPY src/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Switch to non-root user
+# Create and set ownership for the application code directory
+# (Ensures appuser owns source code mounted later if using bind mount for dev)
+# Also create and set ownership for the persistent data directory *before* volume mount
+RUN chown -R appuser:appuser /usr/src/app \
+ && mkdir -p /home/appuser/data \
+ && chown appuser:appuser /home/appuser/data
+
+# Set the entrypoint (runs as root by default here)
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Switch to non-root user for the CMD
 USER appuser
 
-# Run the application
+# Default command (will be passed to entrypoint and run as appuser)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

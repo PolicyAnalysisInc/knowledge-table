@@ -118,6 +118,7 @@ dev = [
     "pytest",
     "pytest-html",
     "pytest-mock",
+    "pytest-dotenv",
 ]
 
 [project.scripts]

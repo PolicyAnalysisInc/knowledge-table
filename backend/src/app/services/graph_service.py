@@ -417,7 +417,9 @@ async def process_table_and_generate_triples(
             relationships=[
                 SchemaRelationship(**rel)
                 for rel in schema_dict.get("relationships", [])
-            ]
+            ],
+            confidence=schema_dict.get("confidence"),
+            reasoning=schema_dict.get("reasoning")
         )
 
         logger.info("Generated Schema:")

@@ -1,7 +1,8 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+import os
 
 from app import main
 from app.core.config import Settings, get_settings
@@ -12,8 +13,10 @@ from app.services.embedding.base import EmbeddingService
 from app.services.llm.base import CompletionService
 from app.services.vector_db.base import VectorDBService
 
-
 def get_settings_override():
+    temp_settings = Settings()
+    gemini_key = temp_settings.gemini_api_key
+
     return Settings(
         testing=True,
         database_url="test_db_url",
@@ -24,6 +27,7 @@ def get_settings_override():
         llm_provider="test_provider",
         embedding_provider="test_provider",
         openai_api_key=None,
+        gemini_api_key=gemini_key,
         embedding_model="test_embedding_model",
         dimensions=1536,
         llm_model="test_llm_model",

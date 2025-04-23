@@ -3,7 +3,7 @@
 import logging
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator, validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,7 +30,8 @@ class BaseResponseModel(BaseModel):
             return None
         return v
 
-    @validator("confidence", pre=True, always=True)
+    @field_validator("confidence", mode='before')
+    @classmethod
     def validate_confidence(cls, v: Any) -> Optional[int]:
         """Validate if the confidence score is an integer between 1 and 10 or None."""
         if v is None or (isinstance(v, str) and v.lower() in ["none", "null"]):
