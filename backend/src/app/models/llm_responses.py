@@ -12,9 +12,12 @@ logger = logging.getLogger(__name__)
 class BaseResponseModel(BaseModel):
     """Base class for response models with common validation logic."""
 
-    confidence: Optional[int] = Field(
-        default=None,
+    confidence: int = Field(
         description="The confidence score of the LLM's response, from 1 (lowest) to 10 (highest)."
+    )
+
+    reasoning: str = Field(
+        description="The reasoning behind youur answer. Be as thorough as necessary to justify your answer based on the context."
     )
 
     @classmethod

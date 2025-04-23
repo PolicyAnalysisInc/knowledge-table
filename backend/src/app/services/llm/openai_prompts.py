@@ -30,6 +30,7 @@ $format_specific_instructions
 - Be concise and accurate.
 - Do not include any introductory or concluding remarks.
 - If the answer is not present in the context, the 'answer' field should be exactly `null`.
+- Do not include JSON or any code inside strins in the response. Any string responses should be the most direct human readable answer.
 {confidence_instruction}
 
 **Answer** (JSON object with 'answer' and 'confidence' fields):
