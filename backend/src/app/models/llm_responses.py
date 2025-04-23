@@ -3,7 +3,7 @@
 import logging
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -12,12 +12,20 @@ logger = logging.getLogger(__name__)
 class BaseResponseModel(BaseModel):
     """Base class for response models with common validation logic."""
 
+    # Keep confidence and reasoning non-optional
     confidence: int = Field(
         description="The confidence score of the LLM's response, from 1 (lowest) to 10 (highest)."
     )
 
     reasoning: str = Field(
-        description="The reasoning behind youur answer. Be as thorough as necessary to justify your answer based on the context."
+        description="The reasoning behind your answer. Be as thorough as necessary to justify your answer based on the context."
+    )
+
+    # Add back the all_responses field
+    all_responses: Optional[List[Optional["BaseResponseModel"]]] = Field(
+        default=None,
+        exclude=True, # Exclude from serialization by default
+        description="Internal field used by MultiCompletionService to store all parallel responses."
     )
 
     @classmethod

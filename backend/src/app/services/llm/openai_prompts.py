@@ -4,12 +4,13 @@ from string import Template
 
 # Shared confidence instruction snippet
 CONFIDENCE_INSTRUCTION = "- Include a `confidence` score (integer from 1 to 10, 1 being lowest confidence, 10 being highest) indicating how certain you are about the answer based *only* on the provided context."
+REASONING_INSTRUCTION = "- Include a `reasoning` field (string) explaining the step-by-step process and the parts of the context you used to arrive at your answer."
 
 BASE_PROMPT = Template(
     """
 You are an expert assistant whose job is to answer the following question using **only** the information provided in the **Context**. Do not use any prior knowledge or external information.
 
-Your response MUST be a JSON object with two fields: 'answer' and 'confidence'.
+Your response MUST be a JSON object with three fields: 'answer', 'confidence', and 'reasoning'.
 
 ---
 
@@ -32,25 +33,27 @@ $format_specific_instructions
 - If the answer is not present in the context, the 'answer' field should be exactly `null`.
 - Do not include JSON or any code inside strins in the response. Any string responses should be the most direct human readable answer.
 {confidence_instruction}
+{reasoning_instruction}
 
-**Answer** (JSON object with 'answer' and 'confidence' fields):
-""".format(confidence_instruction=CONFIDENCE_INSTRUCTION)
+**Answer** (JSON object with 'answer', 'confidence', and 'reasoning' fields):
+""".format(confidence_instruction=CONFIDENCE_INSTRUCTION, reasoning_instruction=REASONING_INSTRUCTION)
 )
 
 INFERRED_BASE_PROMPT = Template(
     """
 Answer the following question following the formatting instructions at the bottom. Do not include quotes, formatting, or any explanation or extra information. Just answer the question.
 
-Your response MUST be a JSON object with two fields: 'answer' and 'confidence'.
+Your response MUST be a JSON object with three fields: 'answer', 'confidence', and 'reasoning'.
 
 **Question**: $query
 
 $format_specific_instructions
 
 {confidence_instruction}
+{reasoning_instruction}
 
-**Answer** (JSON object with 'answer' and 'confidence' fields):
-""".format(confidence_instruction=CONFIDENCE_INSTRUCTION)
+**Answer** (JSON object with 'answer', 'confidence', and 'reasoning' fields):
+""".format(confidence_instruction=CONFIDENCE_INSTRUCTION, reasoning_instruction=REASONING_INSTRUCTION)
 )
 
 BOOL_INSTRUCTIONS = """

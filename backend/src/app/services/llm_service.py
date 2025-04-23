@@ -147,16 +147,17 @@ async def generate_response(
 
         if response is None:
             logger.warning("LLM returned None object")
-            return {"answer": None, "confidence": None}
+            return {"answer": None, "confidence": None, "reasoning": None}
 
-        # Return both answer and confidence
+        # Return answer, confidence, and reasoning
         answer = getattr(response, 'answer', None)
         confidence = getattr(response, 'confidence', None)
-        logger.info(f"Processed response: answer={answer}, confidence={confidence}")
-        return {"answer": answer, "confidence": confidence}
+        reasoning = getattr(response, 'reasoning', None)
+        logger.info(f"Processed response: answer={answer}, confidence={confidence}, reasoning={reasoning}")
+        return {"answer": answer, "confidence": confidence, "reasoning": reasoning}
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}", exc_info=True)
-        return {"answer": None, "confidence": None}
+        return {"answer": None, "confidence": None, "reasoning": None}
 
 
 async def generate_inferred_response(
@@ -202,16 +203,17 @@ async def generate_inferred_response(
 
         if response is None:
             logger.warning("LLM returned None object")
-            return {"answer": None, "confidence": None}
+            return {"answer": None, "confidence": None, "reasoning": None}
 
-        # Return both answer and confidence
+        # Return answer, confidence, and reasoning
         answer = getattr(response, 'answer', None)
         confidence = getattr(response, 'confidence', None)
-        logger.info(f"Processed response: answer={answer}, confidence={confidence}")
-        return {"answer": answer, "confidence": confidence}
+        reasoning = getattr(response, 'reasoning', None)
+        logger.info(f"Processed response: answer={answer}, confidence={confidence}, reasoning={reasoning}")
+        return {"answer": answer, "confidence": confidence, "reasoning": reasoning}
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}", exc_info=True)
-        return {"answer": None, "confidence": None}
+        return {"answer": None, "confidence": None, "reasoning": None}
 
 
 async def get_keywords(

@@ -12,24 +12,32 @@ from app.core.config import Settings # Import Settings for fixture
 def pydantic_service(test_settings, mocker):
     # Patch the Agent class within the service module
     mock_agent_instance = AsyncMock() # This is the instance the patched Agent will return
-    mocker.patch(
+    mock_agent_class = mocker.patch(
         "app.services.llm.pydantic_llm_service.Agent",
         return_value=mock_agent_instance
+    )
+
+    # Mock get_active_llm_config *within the fixture* to return a default config.
+    # Individual tests can override this patch if needed.
+    mock_default_llm_instance = MagicMock()
+    mock_default_config = MagicMock()
+    mock_default_config.get_instance.return_value = mock_default_llm_instance
+    mock_default_config.settings = {"default_setting": True}
+    mock_get_active = mocker.patch(
+        "app.services.llm.pydantic_llm_service.get_active_llm_config",
+        return_value=mock_default_config
     )
 
     # Initialize the service - it will now get the mocked Agent instance
     service = PydanticCompletionService(test_settings)
 
-    # We can optionally return the mock instance too if tests need to access the class mock itself,
-    # but here the tests interact with service.agent, which is the mock_agent_instance.
-    # For clarity, let's ensure service.agent is indeed our mock instance
-    service.agent = mock_agent_instance # Explicitly assign for clarity, though patch should handle it
-
-    return service
+    # Return the service and the mocks for assertions in tests
+    return service, mock_agent_instance, mock_agent_class, mock_get_active
 
 
 @pytest.mark.asyncio
 async def test_generate_completion(pydantic_service):
+    service, mock_agent_instance, _, mock_get_active = pydantic_service
     # No skip check needed as Agent is always patched
     class DummyResponseModel(BaseModel):
         content: str
@@ -38,17 +46,58 @@ async def test_generate_completion(pydantic_service):
     mock_response_instance = DummyResponseModel(content="Test response")
     mock_agent_run_result = MagicMock()
     mock_agent_run_result.output = mock_response_instance
-    pydantic_service.agent.run = AsyncMock(return_value=mock_agent_run_result)
+    mock_agent_instance.run = AsyncMock(return_value=mock_agent_run_result)
 
-    result = await pydantic_service.generate_completion("Test prompt", DummyResponseModel)
+    result = await service.generate_completion("Test prompt", DummyResponseModel)
 
     assert isinstance(result, DummyResponseModel)
     assert result.content == "Test response"
-    pydantic_service.agent.run.assert_awaited_once_with("Test prompt", **{})
+    mock_get_active.assert_called_once() # Ensure default config was used
+    mock_agent_instance.run.assert_awaited_once_with("Test prompt", **{"default_setting": True})
+
+
+@pytest.mark.asyncio
+async def test_generate_completion_with_override(pydantic_service, mocker):
+    service, mock_agent_instance, mock_agent_class, mock_get_active = pydantic_service
+
+    class DummyResponseModel(BaseModel):
+        content: str
+
+    # Create an override LLMConfig
+    mock_override_llm_instance = MagicMock()
+    override_config = MagicMock()
+    override_config.get_instance.return_value = mock_override_llm_instance
+    override_config.settings = {"override_setting": 0.99}
+
+    # Mock the response from agent.run
+    mock_response_instance = DummyResponseModel(content="Override response")
+    mock_agent_run_result = MagicMock()
+    mock_agent_run_result.output = mock_response_instance
+    mock_agent_instance.run = AsyncMock(return_value=mock_agent_run_result)
+
+    result = await service.generate_completion(
+        "Test prompt override",
+        DummyResponseModel,
+        llm_config_override=override_config
+    )
+
+    assert isinstance(result, DummyResponseModel)
+    assert result.content == "Override response"
+
+    # Assertions
+    mock_get_active.assert_not_called() # Should NOT use the default getter
+    override_config.get_instance.assert_called_once() # Should use the override's instance getter
+    mock_agent_class.assert_called_once_with( # Agent should be init'd with override instance
+        mock_override_llm_instance, output_type=DummyResponseModel, instrument=True
+    )
+    mock_agent_instance.run.assert_awaited_once_with( # Run should use override settings
+        "Test prompt override", **{"override_setting": 0.99}
+    )
 
 
 @pytest.mark.asyncio
 async def test_generate_completion_none_response(pydantic_service):
+    service, mock_agent_instance, _, mock_get_active = pydantic_service
     # No skip check needed
     class DummyResponseModel(BaseModel):
         content: str
@@ -56,15 +105,17 @@ async def test_generate_completion_none_response(pydantic_service):
     # Mock agent.run to return a result object with .output = None
     mock_agent_run_result = MagicMock()
     mock_agent_run_result.output = None
-    pydantic_service.agent.run = AsyncMock(return_value=mock_agent_run_result)
+    mock_agent_instance.run = AsyncMock(return_value=mock_agent_run_result)
 
-    result = await pydantic_service.generate_completion("Test prompt", DummyResponseModel)
+    result = await service.generate_completion("Test prompt", DummyResponseModel)
 
     assert result is None
-    pydantic_service.agent.run.assert_awaited_once_with("Test prompt", **{})
+    mock_get_active.assert_called_once() # Ensure default config was used
+    mock_agent_instance.run.assert_awaited_once_with("Test prompt", **{"default_setting": True})
 
 @pytest.mark.asyncio
 async def test_generate_completion_all_fields_none(pydantic_service):
+    service, mock_agent_instance, _, mock_get_active = pydantic_service
     # No skip check needed
     class DummyResponseModelOptional(BaseModel):
         content: str | None = None
@@ -74,13 +125,14 @@ async def test_generate_completion_all_fields_none(pydantic_service):
     mock_response_instance = DummyResponseModelOptional(content=None, another_field=None)
     mock_agent_run_result = MagicMock()
     mock_agent_run_result.output = mock_response_instance
-    pydantic_service.agent.run = AsyncMock(return_value=mock_agent_run_result)
+    mock_agent_instance.run = AsyncMock(return_value=mock_agent_run_result)
 
-    result = await pydantic_service.generate_completion("Test prompt", DummyResponseModelOptional)
+    result = await service.generate_completion("Test prompt", DummyResponseModelOptional)
 
     # The service should return None if all fields are None
     assert result is None
-    pydantic_service.agent.run.assert_awaited_once_with("Test prompt", **{})
+    mock_get_active.assert_called_once() # Ensure default config was used
+    mock_agent_instance.run.assert_awaited_once_with("Test prompt", **{"default_setting": True})
 
 
 @pytest.mark.asyncio
@@ -93,7 +145,8 @@ async def test_generate_completion_agent_not_initialized(test_settings, mocker):
     # to simulate failure due to missing keys
     mock_active_config = MagicMock()
     mock_active_config.get_instance.side_effect = RuntimeError("Simulated instantiation failure")
-    mocker.patch(
+    # Keep the patch specific to this test
+    mock_get_active = mocker.patch(
         "app.services.llm.pydantic_llm_service.get_active_llm_config",
         return_value=mock_active_config
     )
@@ -105,15 +158,17 @@ async def test_generate_completion_agent_not_initialized(test_settings, mocker):
     # which should be caught by the try/except block in generate_completion
     result = await service.generate_completion("Test prompt", DummyResponseModel)
     assert result is None
+    mock_get_active.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_decompose_query(pydantic_service):
+    service, mock_agent_instance, _, mock_get_active = pydantic_service
     # No skip check needed
     test_query = "Test query"
     # Currently, decompose_query returns the original query as a placeholder
     # We don't mock agent.run because the current implementation doesn't call it
-    result = await pydantic_service.decompose_query(test_query)
+    result = await service.decompose_query(test_query)
 
     assert result == {"sub_queries": [test_query]}
     # If decompose_query were implemented using agent.run, add assertion like:
