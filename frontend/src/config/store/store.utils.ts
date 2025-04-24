@@ -70,6 +70,7 @@ export function getBlankTable(name?: string): AnswerTable {
     filters: [],
     chunks: {},
     openedChunks: [],
+    citations: {},
     loadingCells: {},
     uploadingFiles: false
   };

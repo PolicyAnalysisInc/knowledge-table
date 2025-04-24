@@ -82,7 +82,7 @@ async def test_vector_search(qdrant_service, mock_embeddings_service):
     result = await qdrant_service.vector_search(["test query"], "test_doc")
 
     assert isinstance(result, VectorResponseSchema)
-    assert result.message == "Query processed successfully."
+    assert isinstance(result.chunks, list)
     assert qdrant_service.client.query_points.called
 
 
@@ -100,7 +100,7 @@ async def test_hybrid_search(qdrant_service, mock_embeddings_service):
         )
 
         assert isinstance(result, VectorResponseSchema)
-        assert result.message == "Query processed successfully."
+        assert isinstance(result.chunks, list)
         assert qdrant_service.client.query_points.called
 
 

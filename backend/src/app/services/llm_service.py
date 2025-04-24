@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any, List, Tuple, Type, Union
+from typing import Any, List, Tuple, Type, Union, Dict, Optional
 
 from app.models.llm_responses import (
     BaseResponseModel,
@@ -107,7 +107,7 @@ async def generate_response(
     chunks: str,
     rules: list[Rule],
     format: FormatType,
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     """
     Generate a response from the language model based on the given query and format.
 
@@ -142,22 +142,34 @@ async def generate_response(
     )
 
     try:
-        response = await llm_service.generate_completion(prompt, output_model)
+        response: Optional[BaseResponseModel] = await llm_service.generate_completion(prompt, output_model)
         logger.info(f"Raw response from LLM: {response}")
 
         if response is None:
             logger.warning("LLM returned None object")
-            return {"answer": None, "confidence": None, "reasoning": None}
+            return {"answer": None, "confidence": None, "reasoning": None, "citations": []}
 
-        # Return answer, confidence, and reasoning
+        # Extract answer, confidence, reasoning, and citations
         answer = getattr(response, 'answer', None)
+        # Handle non-answer models
+        if answer is None:
+            if isinstance(response, KeywordsResponseModel):
+                answer = getattr(response, 'keywords', None)
+            elif isinstance(response, SubQueriesResponseModel):
+                answer = getattr(response, 'sub_queries', None)
+            elif isinstance(response, SchemaResponseModel):
+                 answer = getattr(response, 'relationships', None)
+
         confidence = getattr(response, 'confidence', None)
         reasoning = getattr(response, 'reasoning', None)
-        logger.info(f"Processed response: answer={answer}, confidence={confidence}, reasoning={reasoning}")
-        return {"answer": answer, "confidence": confidence, "reasoning": reasoning}
+        # Citations should now always exist due to model validation, default to [] if somehow None
+        citations = getattr(response, 'citations', [])
+
+        logger.info(f"Processed response: answer={answer}, confidence={confidence}, reasoning={reasoning}, citations={citations}")
+        return {"answer": answer, "confidence": confidence, "reasoning": reasoning, "citations": citations}
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}", exc_info=True)
-        return {"answer": None, "confidence": None, "reasoning": None}
+        return {"answer": None, "confidence": None, "reasoning": None, "citations": []}
 
 
 async def generate_inferred_response(
@@ -165,7 +177,7 @@ async def generate_inferred_response(
     query: str,
     rules: list[Rule],
     format: FormatType,
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     """
     Generate a response from the language model based on the given query and format.
 
@@ -198,27 +210,39 @@ async def generate_inferred_response(
     )
 
     try:
-        response = await llm_service.generate_completion(prompt, output_model)
+        response: Optional[BaseResponseModel] = await llm_service.generate_completion(prompt, output_model)
         logger.info(f"Raw response from LLM: {response}")
 
         if response is None:
             logger.warning("LLM returned None object")
-            return {"answer": None, "confidence": None, "reasoning": None}
+            return {"answer": None, "confidence": None, "reasoning": None, "citations": []}
 
-        # Return answer, confidence, and reasoning
+        # Extract answer, confidence, reasoning, and citations
         answer = getattr(response, 'answer', None)
+        # Handle non-answer models
+        if answer is None:
+             if isinstance(response, KeywordsResponseModel):
+                 answer = getattr(response, 'keywords', None)
+             elif isinstance(response, SubQueriesResponseModel):
+                 answer = getattr(response, 'sub_queries', None)
+             elif isinstance(response, SchemaResponseModel):
+                  answer = getattr(response, 'relationships', None)
+
         confidence = getattr(response, 'confidence', None)
         reasoning = getattr(response, 'reasoning', None)
-        logger.info(f"Processed response: answer={answer}, confidence={confidence}, reasoning={reasoning}")
-        return {"answer": answer, "confidence": confidence, "reasoning": reasoning}
+        # Citations should now always exist due to model validation, default to [] if somehow None
+        citations = getattr(response, 'citations', [])
+
+        logger.info(f"Processed inferred response: answer={answer}, confidence={confidence}, reasoning={reasoning}, citations={citations}")
+        return {"answer": answer, "confidence": confidence, "reasoning": reasoning, "citations": citations}
     except Exception as e:
-        logger.error(f"Error generating response: {str(e)}", exc_info=True)
-        return {"answer": None, "confidence": None, "reasoning": None}
+        logger.error(f"Error generating inferred response: {str(e)}", exc_info=True)
+        return {"answer": None, "confidence": None, "reasoning": None, "citations": []}
 
 
 async def get_keywords(
     llm_service: CompletionService, query: str
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     """
     Extract keywords from a query using the language model.
 
@@ -234,28 +258,36 @@ async def get_keywords(
     dict[str, Any]
         A dictionary containing the extracted keywords and confidence or None if an error occurs.
     """
-    # Create the prompt
-    prompt = KEYWORD_PROMPT.substitute(query=query)
+    logger.info(f"Extracting keywords for query: {query}")
 
     try:
-        # Generate the response
-        response = await llm_service.generate_completion(
+        prompt = KEYWORD_PROMPT.substitute(query=query)
+        response: Optional[KeywordsResponseModel] = await llm_service.generate_completion(
             prompt, KeywordsResponseModel
         )
+        logger.info(f"Raw keyword response from LLM: {response}")
+
+        if response is None:
+            logger.warning("Keyword LLM returned None object")
+            return {"keywords": None, "confidence": None, "reasoning": None, "citations": []}
+
         keywords = getattr(response, 'keywords', None)
         confidence = getattr(response, 'confidence', None)
-        return {
-            "keywords": keywords if keywords and keywords != ["None"] else None,
-            "confidence": confidence
-        }
+        reasoning = getattr(response, 'reasoning', None)
+        # Citations should now always exist due to model validation, default to [] if somehow None
+        citations = getattr(response, 'citations', [])
+
+        logger.info(f"Processed keywords: keywords={keywords}, confidence={confidence}, reasoning={reasoning}, citations={citations}")
+        # Return structure aligns with BaseResponseModel fields + specific field ('keywords')
+        return {"keywords": keywords, "confidence": confidence, "reasoning": reasoning, "citations": citations}
     except Exception as e:
-        logger.error(f"Error extracting keywords: {e}")
-        return {"keywords": None, "confidence": None}
+        logger.error(f"Error extracting keywords: {str(e)}", exc_info=True)
+        return {"keywords": None, "confidence": None, "reasoning": None, "citations": []}
 
 
 async def get_similar_keywords(
     llm_service: CompletionService, chunks: str, rule: list[str]
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     """
     Retrieve keywords similar to the provided keywords from the given text chunks.
 
@@ -273,36 +305,36 @@ async def get_similar_keywords(
     dict[str, Any]
         A dictionary containing the similar keywords found and confidence or None if an error occurs.
     """
-    logger.info(
-        f"Retrieving keywords which are similar to the provided keywords: {rule}"
-    )
-
-    # Create the prompt
-    prompt = SIMILAR_KEYWORDS_PROMPT.substitute(
-        rule=rule,
-        chunks=chunks,
-    )
+    logger.info(f"Finding similar keywords based on rule: {rule}")
 
     try:
-
-        # Generate the response
-        response = await llm_service.generate_completion(
+        rule_str = ", ".join(rule) if isinstance(rule, list) else str(rule)
+        prompt = SIMILAR_KEYWORDS_PROMPT.substitute(rule=rule_str, chunks=chunks)
+        response: Optional[KeywordsResponseModel] = await llm_service.generate_completion(
             prompt, KeywordsResponseModel
         )
+        logger.info(f"Raw similar keywords response from LLM: {response}")
+
+        if response is None:
+            logger.warning("Similar keywords LLM returned None object")
+            return {"keywords": None, "confidence": None, "reasoning": None, "citations": []}
+
         keywords = getattr(response, 'keywords', None)
         confidence = getattr(response, 'confidence', None)
-        return {
-            "keywords": keywords if keywords and keywords != ["None"] else None,
-            "confidence": confidence
-        }
+        reasoning = getattr(response, 'reasoning', None)
+        # Citations should now always exist due to model validation, default to [] if somehow None
+        citations = getattr(response, 'citations', [])
+
+        logger.info(f"Processed similar keywords: keywords={keywords}, confidence={confidence}, reasoning={reasoning}, citations={citations}")
+        return {"keywords": keywords, "confidence": confidence, "reasoning": reasoning, "citations": citations}
     except Exception as e:
-        logger.error(f"Error getting similar keywords: {e}")
-        return {"keywords": None, "confidence": None}
+        logger.error(f"Error finding similar keywords: {str(e)}", exc_info=True)
+        return {"keywords": None, "confidence": None, "reasoning": None, "citations": []}
 
 
 async def decompose_query(
     llm_service: CompletionService, query: str
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     """
     Decompose a complex query into multiple simpler sub-queries.
 
@@ -318,35 +350,35 @@ async def decompose_query(
     dict[str, Any]
         A dictionary containing the list of sub-queries and confidence or None if an error occurs.
     """
-    logger.info("Decomposing query into multiple sub-queries.")
-
-    # Create the prompt
-    prompt = DECOMPOSE_QUERY_PROMPT.substitute(query=query)
+    logger.info(f"Decomposing query: {query}")
 
     try:
-
-        # Generate the response
-        response = await llm_service.generate_completion(
+        prompt = DECOMPOSE_QUERY_PROMPT.substitute(query=query)
+        response: Optional[SubQueriesResponseModel] = await llm_service.generate_completion(
             prompt, SubQueriesResponseModel
         )
+        logger.info(f"Raw decompose query response from LLM: {response}")
+
+        if response is None:
+            logger.warning("Decompose query LLM returned None object")
+            return {"sub_queries": None, "confidence": None, "reasoning": None, "citations": []}
+
         sub_queries = getattr(response, 'sub_queries', None)
         confidence = getattr(response, 'confidence', None)
-        return {
-            "sub-queries": (
-                sub_queries
-                if sub_queries and sub_queries != ["None"]
-                else None
-            ),
-            "confidence": confidence
-        }
+        reasoning = getattr(response, 'reasoning', None)
+        # Citations should now always exist due to model validation, default to [] if somehow None
+        citations = getattr(response, 'citations', [])
+
+        logger.info(f"Processed sub-queries: sub_queries={sub_queries}, confidence={confidence}, reasoning={reasoning}, citations={citations}")
+        return {"sub_queries": sub_queries, "confidence": confidence, "reasoning": reasoning, "citations": citations}
     except Exception as e:
-        logger.error(f"Error decomposing query: {e}")
-        return {"sub-queries": None, "confidence": None}
+        logger.error(f"Error decomposing query: {str(e)}", exc_info=True)
+        return {"sub_queries": None, "confidence": None, "reasoning": None, "citations": []}
 
 
 async def generate_schema(
     llm_service: CompletionService, data: Table
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     """
     Generate a schema for the table based on column information and questions.
 
@@ -364,57 +396,59 @@ async def generate_schema(
     """
     logger.info("Generating schema.")
 
-    # Ensure documents is a list of strings
-    documents: List[str] = list(
-        set(str(row.document.name) for row in data.rows)
-    )
-
-    prepared_data = {
-        "documents": documents,
-        "columns": [
-            {
-                "id": column.id,
-                "entity_type": column.prompt.entityType,
-                "type": column.prompt.type,
-                "question": column.prompt.query,
-            }
-            for column in data.columns
-        ],
-    }
-
-    # Ensure prepared_data["columns"] is a list
-    if not isinstance(prepared_data["columns"], list):
-        logger.error("prepared_data['columns'] is not a list")
-        return {"schema": None, "confidence": None}
-
-    entity_types: List[str] = [
-        column["entity_type"] for column in prepared_data["columns"]
-    ]
-
-    # Ensure we're joining a list of strings
-    prompt = SCHEMA_PROMPT.substitute(
-        documents=", ".join(documents) if documents else "",
-        entity_types=", ".join(entity_types) if entity_types else "",
-        columns=json.dumps(prepared_data["columns"]),
-    )
-
     try:
-        response = await llm_service.generate_completion(
+        documents: List[str] = list(
+            set(str(row.document.name) for row in data.rows if row.document)
+        )
+        columns_data = []
+        entity_types_set = set()
+
+        for column in data.columns:
+            if column.prompt:
+                 col_info = {
+                     "id": column.id,
+                     "entity_type": column.prompt.entityType,
+                     "type": column.prompt.type,
+                     "question": column.prompt.query,
+                 }
+                 columns_data.append(col_info)
+                 entity_types_set.add(column.prompt.entityType)
+            else:
+                 logger.warning(f"Column with id {column.id} is missing prompt data. Skipping for schema generation.")
+
+        if not columns_data:
+             logger.error("No valid column data with prompts found to generate schema.")
+             return {"relationships": None, "confidence": None, "reasoning": None, "citations": []}
+
+        entity_types = list(entity_types_set)
+
+        prompt = SCHEMA_PROMPT.substitute(
+            documents=", ".join(documents) if documents else "",
+            entity_types=", ".join(entity_types) if entity_types else "",
+            columns=json.dumps(columns_data),
+        )
+
+        response: Optional[SchemaResponseModel] = await llm_service.generate_completion(
             prompt, SchemaResponseModel
         )
-        # Use getattr for safer access
-        schema_relationships = getattr(response, 'relationships', None)
-        confidence = getattr(response, 'confidence', None)
-        schema_dump = response.model_dump() if response else {}
+        logger.info(f"Raw schema response from LLM: {response}")
 
-        return {
-             # Return the full dump including confidence, filtering relationships if needed
-            "schema": schema_dump if schema_relationships else None,
-            "confidence": confidence # Also return confidence separately if needed upstream
-            }
+        if response is None:
+            logger.warning("Generate schema LLM returned None object")
+            return {"relationships": None, "confidence": None, "reasoning": None, "citations": []}
+
+        relationships = getattr(response, 'relationships', None)
+        confidence = getattr(response, 'confidence', None)
+        reasoning = getattr(response, 'reasoning', None)
+        # Citations should now always exist due to model validation, default to [] if somehow None
+        citations = getattr(response, 'citations', [])
+
+        logger.info(f"Processed schema: relationships={relationships}, confidence={confidence}, reasoning={reasoning}, citations={citations}")
+        return {"relationships": relationships, "confidence": confidence, "reasoning": reasoning, "citations": citations}
+
     except Exception as e:
-        logger.error(f"Error generating schema: {e}")
-        return {"schema": None, "confidence": None}
+        logger.error(f"Error generating schema: {str(e)}", exc_info=True)
+        return {"relationships": None, "confidence": None, "reasoning": None, "citations": []}
 
 
 def _get_str_rule_line(str_rule: Rule | None, query: str) -> str:

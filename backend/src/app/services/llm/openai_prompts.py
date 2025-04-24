@@ -4,13 +4,16 @@ from string import Template
 
 # Shared confidence instruction snippet
 CONFIDENCE_INSTRUCTION = "- Include a `confidence` score (integer from 1 to 10, 1 being lowest confidence, 10 being highest) indicating how certain you are about the answer based *only* on the provided context."
-REASONING_INSTRUCTION = "- Include a `reasoning` field (string) explaining the step-by-step process and the parts of the context you used to arrive at your answer."
+# Updated reasoning instruction to require inline citations
+REASONING_INSTRUCTION = "- Include a `reasoning` field (string) explaining the step-by-step process to arrive at your answer. **Crucially, whenever you use information from a specific chunk in the Context to support a statement in your reasoning, you MUST cite the chunk identifier (e.g., [chunk_0], [chunk_12]) immediately after the statement.** Base your reasoning strictly on the provided context."
+# Added citation instruction snippet
+CITATIONS_INSTRUCTION = """- Include a `citations` field (JSON array of **integers**) containing the unique 0-based integer indices corresponding to the chunks from the **Context** that you used to formulate the answer and reasoning. If no specific chunks were primarily used or the answer is null, this field should be exactly `null` or an empty list `[]`."""
 
 BASE_PROMPT = Template(
     """
 You are an expert assistant whose job is to answer the following question using **only** the information provided in the **Context**. Do not use any prior knowledge or external information.
 
-Your response MUST be a JSON object with three fields: 'answer', 'confidence', and 'reasoning'.
+Your response MUST be a JSON object with four fields: 'answer', 'confidence', 'reasoning', and 'citations'.
 
 ---
 
@@ -34,16 +37,21 @@ $format_specific_instructions
 - Do not include JSON or any code inside strins in the response. Any string responses should be the most direct human readable answer.
 {confidence_instruction}
 {reasoning_instruction}
+{citations_instruction}
 
-**Answer** (JSON object with 'answer', 'confidence', and 'reasoning' fields):
-""".format(confidence_instruction=CONFIDENCE_INSTRUCTION, reasoning_instruction=REASONING_INSTRUCTION)
+**Answer** (JSON object with 'answer', 'confidence', 'reasoning', and 'citations' fields):
+""".format(
+    confidence_instruction=CONFIDENCE_INSTRUCTION,
+    reasoning_instruction=REASONING_INSTRUCTION,
+    citations_instruction=CITATIONS_INSTRUCTION
+)
 )
 
 INFERRED_BASE_PROMPT = Template(
     """
 Answer the following question following the formatting instructions at the bottom. Do not include quotes, formatting, or any explanation or extra information. Just answer the question.
 
-Your response MUST be a JSON object with three fields: 'answer', 'confidence', and 'reasoning'.
+Your response MUST be a JSON object with four fields: 'answer', 'confidence', 'reasoning', and 'citations'.
 
 **Question**: $query
 
@@ -51,9 +59,14 @@ $format_specific_instructions
 
 {confidence_instruction}
 {reasoning_instruction}
+{citations_instruction}
 
-**Answer** (JSON object with 'answer', 'confidence', and 'reasoning' fields):
-""".format(confidence_instruction=CONFIDENCE_INSTRUCTION, reasoning_instruction=REASONING_INSTRUCTION)
+**Answer** (JSON object with 'answer', 'confidence', 'reasoning', and 'citations' fields):
+""".format(
+    confidence_instruction=CONFIDENCE_INSTRUCTION,
+    reasoning_instruction=REASONING_INSTRUCTION,
+    citations_instruction=CITATIONS_INSTRUCTION
+)
 )
 
 BOOL_INSTRUCTIONS = """

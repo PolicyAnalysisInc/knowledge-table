@@ -1,7 +1,7 @@
 """Pydantic models for validating responses from the LLM API."""
 
 import logging
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
@@ -21,6 +21,11 @@ class BaseResponseModel(BaseModel):
         description="The reasoning behind your answer. Be as thorough as necessary to justify your answer based on the context."
     )
 
+    # Make citations non-optional and integer-based
+    citations: List[int] = Field(
+        description="A list of 0-based integer indices corresponding to the chunks that were used to generate the answer and reasoning. Should be an empty list if no specific chunks were used."
+    )
+
     # Add back the all_responses field
     all_responses: Optional[List[Optional["BaseResponseModel"]]] = Field(
         default=None,
@@ -30,7 +35,7 @@ class BaseResponseModel(BaseModel):
 
     @classmethod
     def validate_none(cls, v: Any) -> Optional[Any]:
-        """Validate if the value is None or "none"."""
+        """Validate if the value is None or \"none\"."""
         if v is None or (
             isinstance(v, str)
             and v.lower() in ["none", "not found", "null", ""]
@@ -54,6 +59,36 @@ class BaseResponseModel(BaseModel):
         except (ValueError, TypeError):
             logger.warning(f"Invalid confidence score value: {v}. Setting to None.")
             return None
+
+    # Update validator for non-optional citations (now integers)
+    @field_validator("citations", mode='before')
+    @classmethod
+    def validate_citations(cls, v: Any) -> List[int]:
+        """Validate citations field (expected List[int]). Returns an empty list if input is None or invalid."""
+        v = cls.validate_none(v)
+        if v is None:
+            return []
+
+        # Handle potential single value case (though list is expected)
+        if isinstance(v, (int, str)):
+            try:
+                return [int(v)]
+            except (ValueError, TypeError):
+                 logger.warning(f"Invalid single citation format: Expected integer, got {v}. Returning empty list.")
+                 return []
+
+        if not isinstance(v, list):
+            logger.warning(f"Invalid citations format: Expected list, got {type(v)}. Returning empty list.")
+            return []
+
+        validated_citations = []
+        for item in v:
+            try:
+                validated_citations.append(int(item))
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid citation item: Could not convert '{item}' to integer. Skipping.")
+
+        return validated_citations
 
 
 class BoolResponseModel(BaseResponseModel):
@@ -283,7 +318,18 @@ class KeywordsResponseModel(ArrayResponseModel):
     @field_validator("keywords", mode="before")
     def validate_keywords(cls, v: Any) -> Optional[List[str]]:
         """Validate if the value is a string array or None."""
-        return cls.validate_array(v)
+        v = cls.validate_none(v)
+        if v is None:
+            return None
+        if isinstance(v, str): # Allow single keyword string
+             v = [v]
+        if not isinstance(v, list):
+            logger.warning(f"Invalid keywords format: Expected list, got {type(v)}. Setting to None.")
+            return None
+        if not all(isinstance(item, str) for item in v):
+             logger.warning(f"Invalid keywords format: List contains non-string items. Setting to None.")
+             return None
+        return v
 
 
 class SubQueriesResponseModel(ArrayResponseModel):
@@ -296,7 +342,18 @@ class SubQueriesResponseModel(ArrayResponseModel):
     @field_validator("sub_queries", mode="before")
     def validate_sub_queries(cls, v: Any) -> Optional[List[str]]:
         """Validate if the value is a string array or None."""
-        return cls.validate_array(v)
+        v = cls.validate_none(v)
+        if v is None:
+            return None
+        if isinstance(v, str): # Allow single subquery string
+            v = [v]
+        if not isinstance(v, list):
+             logger.warning(f"Invalid sub_queries format: Expected list, got {type(v)}. Setting to None.")
+             return None
+        if not all(isinstance(item, str) for item in v):
+             logger.warning(f"Invalid sub_queries format: List contains non-string items. Setting to None.")
+             return None
+        return v
 
 
 class SchemaRelationship(BaseModel):
@@ -321,4 +378,11 @@ class SchemaResponseModel(ArrayResponseModel):
         cls, v: Any
     ) -> Optional[List[SchemaRelationship]]:
         """Validate if the value is a schema relationship array or None."""
-        return cls.validate_array(v)
+        v = cls.validate_none(v)
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            logger.warning(f"Invalid relationships format: Expected list, got {type(v)}. Setting to None.")
+            return None
+        # Pydantic will handle validation of individual items against SchemaRelationship
+        return v

@@ -74,6 +74,7 @@ export interface AnswerTable {
   filters: AnswerTableFilter[];
   chunks: Record<CellKey, Chunk[]>;
   openedChunks: CellKey[];
+  citations: Record<CellKey, number[]>;
   loadingCells: Record<CellKey, true>;
   uploadingFiles: boolean;
 }

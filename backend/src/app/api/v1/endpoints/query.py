@@ -69,7 +69,12 @@ async def run_query(
         )
 
         if not isinstance(query_response, QueryResult):
-            query_response = QueryResult(**query_response)
+            logger.error(f"inference_query returned unexpected type: {type(query_response)}")
+            try:
+                query_response = QueryResult(**query_response)
+            except Exception as cast_error:
+                logger.error(f"Failed to cast inference_query response to QueryResult: {cast_error}")
+                raise HTTPException(status_code=500, detail="Internal server error during inference query processing.")
 
         answer = QueryAnswer(
             id=uuid.uuid4().hex,
@@ -79,7 +84,11 @@ async def run_query(
             type=request.prompt.type,
         )
         response_data = QueryAnswerResponse(
-            answer=answer, chunks=query_response.chunks
+            answer=answer,
+            chunks=query_response.chunks,
+            citations=query_response.citations,
+            resolved_entities=query_response.resolved_entities,
+            reasoning=query_response.reasoning
         )
 
         return response_data
@@ -110,16 +119,12 @@ async def run_query(
         )
 
         if not isinstance(query_response, QueryResult):
-            query_response = QueryResult(**query_response)
-
-        # response_data = QueryResponseSchema(
-        #     id=str(uuid.uuid4()),
-        #     document_id=request.document_id,
-        #     prompt_id=request.prompt.id,
-        #     type=request.prompt.type,
-        #     answer=query_response.answer,
-        #     chunks=query_response.chunks,
-        # )
+            logger.error(f"Query function returned unexpected type: {type(query_response)}")
+            try:
+                query_response = QueryResult(**query_response)
+            except Exception as cast_error:
+                logger.error(f"Failed to cast query function response to QueryResult: {cast_error}")
+                raise HTTPException(status_code=500, detail="Internal server error during query processing.")
 
         answer = QueryAnswer(
             id=uuid.uuid4().hex,
@@ -128,15 +133,16 @@ async def run_query(
             answer=query_response.answer,
             type=request.prompt.type,
         )
-        # Include resolved_entities in the response
         response_data = QueryAnswerResponse(
             answer=answer,
             chunks=query_response.chunks,
-            resolved_entities=query_response.resolved_entities,  # Add this line
+            citations=query_response.citations,
+            resolved_entities=query_response.resolved_entities,
+            reasoning=query_response.reasoning
         )
 
         return response_data
 
     except Exception as e:
-        logger.error(f"Error processing query: {str(e)}")
+        logger.error(f"Error processing query: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

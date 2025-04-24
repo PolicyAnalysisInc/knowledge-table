@@ -76,7 +76,12 @@ async def test_generate_completion_with_override(pydantic_service, mocker):
     override_config.model_name = "mock_model"
 
     # Mock the response from agent.run
-    mock_response_instance = DummyResponseModel(content="Override response", confidence=10, reasoning="Test")
+    mock_response_instance = DummyResponseModel(
+        content="Override response",
+        confidence=10,
+        reasoning="Test",
+        citations=[]
+    )
     mock_agent_run_result = MagicMock()
     mock_agent_run_result.output = mock_response_instance
     mock_agent_instance.run = AsyncMock(return_value=mock_agent_run_result)

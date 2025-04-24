@@ -25,7 +25,8 @@ async def test_process_query_decomposition(
         mock_generate_response.return_value = {
             "answer": "Test answer",
             "confidence": 9,
-            "reasoning": "Test reasoning"
+            "reasoning": "Test reasoning",
+            "citations": []
         }
 
         result = await process_query(
@@ -42,7 +43,8 @@ async def test_process_query_decomposition(
             answer="Test answer",
             chunks=[Chunk(content="Test content", page=1)],
             confidence=9,
-            reasoning="Test reasoning"
+            reasoning="Test reasoning",
+            citations=[]
         )
         mock_vector_db_service.decomposed_search.assert_called_once_with(
             "test query", "doc_id", []
@@ -61,7 +63,8 @@ async def test_process_query_hybrid(mock_vector_db_service, mock_llm_service):
         mock_generate_response.return_value = {
             "answer": "Test answer",
             "confidence": 8,
-            "reasoning": "Another test reasoning"
+            "reasoning": "Another test reasoning",
+            "citations": []
         }
 
         result = await process_query(
@@ -78,7 +81,8 @@ async def test_process_query_hybrid(mock_vector_db_service, mock_llm_service):
             answer="Test answer",
             chunks=[Chunk(content="Test content", page=1)],
             confidence=8,
-            reasoning="Another test reasoning"
+            reasoning="Another test reasoning",
+            citations=[]
         )
         mock_vector_db_service.hybrid_search.assert_called_once_with(
             "test query", "doc_id", []
@@ -106,7 +110,8 @@ async def test_process_query_simple_vector(
         mock_generate_response.return_value = {
             "answer": "Test answer",
             "confidence": 10,
-            "reasoning": "Final test reasoning"
+            "reasoning": "Final test reasoning",
+            "citations": []
         }
 
         result = await process_query(
@@ -123,7 +128,8 @@ async def test_process_query_simple_vector(
             answer="Test answer",
             chunks=[Chunk(content="Test content", page=1)],
             confidence=10,
-            reasoning="Final test reasoning"
+            reasoning="Final test reasoning",
+            citations=[]
         )
 
         # Reset the mock and then check the call
@@ -138,7 +144,7 @@ async def test_decomposition_query(mock_llm_service, mock_vector_db_service):
         "app.services.query_service.process_query"
     ) as mock_process_query:
         mock_process_query.return_value = QueryResult(
-            answer="Test answer", chunks=[]
+            answer="Test answer", chunks=[], reasoning="Mock reasoning", citations=[]
         )
 
         result = await decomposition_query(
@@ -150,7 +156,7 @@ async def test_decomposition_query(mock_llm_service, mock_vector_db_service):
             mock_vector_db_service,
         )
 
-        assert result == QueryResult(answer="Test answer", chunks=[])
+        assert result == QueryResult(answer="Test answer", chunks=[], reasoning="Mock reasoning", citations=[])
         mock_process_query.assert_called_once_with(
             "decomposition",
             "test query",
@@ -168,7 +174,7 @@ async def test_hybrid_query(mock_llm_service, mock_vector_db_service):
         "app.services.query_service.process_query"
     ) as mock_process_query:
         mock_process_query.return_value = QueryResult(
-            answer="Test answer", chunks=[]
+            answer="Test answer", chunks=[], reasoning="Mock reasoning", citations=[]
         )
 
         result = await hybrid_query(
@@ -180,7 +186,7 @@ async def test_hybrid_query(mock_llm_service, mock_vector_db_service):
             mock_vector_db_service,
         )
 
-        assert result == QueryResult(answer="Test answer", chunks=[])
+        assert result == QueryResult(answer="Test answer", chunks=[], reasoning="Mock reasoning", citations=[])
         mock_process_query.assert_called_once_with(
             "hybrid",
             "test query",
@@ -198,7 +204,7 @@ async def test_simple_vector_query(mock_llm_service, mock_vector_db_service):
         "app.services.query_service.process_query"
     ) as mock_process_query:
         mock_process_query.return_value = QueryResult(
-            answer="Test answer", chunks=[]
+            answer="Test answer", chunks=[], reasoning="Mock reasoning", citations=[]
         )
 
         result = await simple_vector_query(
@@ -210,7 +216,7 @@ async def test_simple_vector_query(mock_llm_service, mock_vector_db_service):
             mock_vector_db_service,
         )
 
-        assert result == QueryResult(answer="Test answer", chunks=[])
+        assert result == QueryResult(answer="Test answer", chunks=[], reasoning="Mock reasoning", citations=[])
         mock_process_query.assert_called_once_with(
             "simple_vector",
             "test query",

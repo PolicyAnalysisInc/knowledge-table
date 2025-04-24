@@ -107,7 +107,8 @@ async def test_generate_triples(sample_table_data):
             )
         ],
         confidence=10,
-        reasoning="Test reasoning"
+        reasoning="Test reasoning",
+        citations=[]
     )
     result = await generate_triples(schema, sample_table_data)
     assert isinstance(result, ExportTriplesResponseSchema)
@@ -169,17 +170,18 @@ async def test_process_table_and_generate_triples(
 ):
     mock_get_llm_service.return_value = mock_llm_service
     mock_generate_schema.return_value = {
-        "schema": {
-            "relationships": [
-                {
-                    "head": "Entity1",
-                    "relation": "relates_to",
-                    "tail": "Entity2",
-                }
+        "schema": SchemaResponseModel(
+            relationships=[
+                SchemaRelationship(
+                    head="Entity1",
+                    relation="relates_to",
+                    tail="Entity2",
+                )
             ],
-            "confidence": 10,
-            "reasoning": "Mocked reasoning"
-        }
+            confidence=10,
+            reasoning="Mocked reasoning",
+            citations=[]
+        )
     }
 
     result = await process_table_and_generate_triples(sample_table_data)

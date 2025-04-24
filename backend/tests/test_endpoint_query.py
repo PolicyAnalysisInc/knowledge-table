@@ -11,6 +11,8 @@ def mock_query_response():
     return QueryResult(
         answer="The capital of France is Paris.",
         chunks=[Chunk(content="Paris is the capital of France.", page=1)],
+        citations=[],
+        reasoning="Test reasoning"
     )
 
 
@@ -24,6 +26,8 @@ def mock_query_response_string_array():
                 page=1,
             )
         ],
+        citations=[],
+        reasoning="Test reasoning array"
     )
 
 
@@ -162,6 +166,8 @@ def mock_query_response_with_entities():
     return QueryResult(
         answer="The disease is Multiple Sclerosis and another disease is Amyotrophic Lateral Sclerosis.",
         chunks=[Chunk(content="The patient has ms and als.", page=1)],
+        citations=[0],
+        reasoning="Resolved ms and als"
     )
 
 
@@ -170,6 +176,8 @@ def mock_query_response_string_array_with_entities():
     return QueryResult(
         answer=["Multiple Sclerosis", "Amyotrophic Lateral Sclerosis"],
         chunks=[Chunk(content="The patient has ms and als.", page=1)],
+        citations=[0],
+        reasoning="Resolved ms and als array"
     )
 
 

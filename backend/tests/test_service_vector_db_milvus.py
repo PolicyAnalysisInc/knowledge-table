@@ -101,7 +101,7 @@ async def test_hybrid_search(vector_db_service):
     result = await vector_db_service.hybrid_search(query, document_id, rules)
 
     assert isinstance(result, VectorResponseSchema)
-    assert result.message == "Query processed successfully."
+    assert isinstance(result.chunks, list)
 
 
 @pytest.mark.asyncio

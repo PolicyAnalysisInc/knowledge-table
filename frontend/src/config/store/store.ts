@@ -401,7 +401,7 @@ export const useStore = create<Store>()(
           if (shouldRunQuery) {
             // Inside runQuery.then callback in rerunCells:
             runQuery(row, column, globalRules)
-              .then(({ answer, chunks, resolvedEntities }) => {
+              .then(({ answer, chunks, resolvedEntities, citations }) => {
                 editCells(
                   [{ rowId: row.id, columnId: column.id, cell: answer.answer }],
                   activeTableId
@@ -431,6 +431,7 @@ export const useStore = create<Store>()(
 
                 editTable(activeTableId, {
                   chunks: { ...currentTable.chunks, [key]: chunks },
+                  citations: { ...currentTable.citations, [key]: citations },
                   loadingCells: omit(currentTable.loadingCells, key),
                   columns: currentTable.columns.map(col => ({
                     ...col,

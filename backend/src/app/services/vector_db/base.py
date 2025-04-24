@@ -96,7 +96,7 @@ class VectorDBService(ABC):
         self, document_id: str, chunks: List[Document]
     ) -> List[Dict[str, Any]]:
         """Prepare chunks for insertion into the vector database."""
-        logger.info(f"Preparing {len(chunks)} chunks")
+        logger.info(f"Preparing {len(chunks)} chunks for document {document_id}")
 
         # Clean the chunks
         cleaned_texts = [
@@ -108,20 +108,44 @@ class VectorDBService(ABC):
         # Embed all chunks at once
         embedded_chunks = await self.get_embeddings(cleaned_texts)
 
-        # Prepare the data for insertion
-        return [
-            {
+        # Prepare the data for insertion with detailed logging for page numbers
+        prepared_data = []
+        for i, (chunk, text, embedding) in enumerate(
+            zip(chunks, cleaned_texts, embedded_chunks)
+        ):
+            metadata_page = chunk.metadata.get("page")
+            final_page_number: int
+
+            if metadata_page is not None:
+                try:
+                    # Attempt to convert metadata page to int
+                    page_from_metadata = int(metadata_page)
+                    # ADD 1 TO THE METADATA PAGE NUMBER
+                    final_page_number = page_from_metadata + 1
+                    logger.info(f"Chunk {i}: Found 'page' in metadata: {metadata_page}. Assigning page_number: {final_page_number} (metadata + 1)")
+                except (ValueError, TypeError):
+                    logger.warning(f"Chunk {i}: Could not convert metadata 'page' ({metadata_page}) to int. Using fallback.")
+                    # Fallback logic remains the same (starts from 1)
+                    fallback_page_number = i // 5 + 1
+                    logger.info(f"Chunk {i}: Using fallback page calculation: {i} // 5 + 1 = {fallback_page_number}")
+                    final_page_number = fallback_page_number
+            else:
+                # Metadata 'page' key not found, use fallback (starts from 1)
+                fallback_page_number = i // 5 + 1
+                logger.info(f"Chunk {i}: Did not find 'page' in metadata. Using fallback: {i} // 5 + 1 = {fallback_page_number}")
+                final_page_number = fallback_page_number
+
+            payload = {
                 "id": str(uuid.uuid4()),
                 "vector": embedding,
                 "text": text,
-                "page_number": chunk.metadata.get("page", i // 5 + 1),
+                "page_number": final_page_number, # Use the potentially incremented page number
                 "chunk_number": i,
                 "document_id": document_id,
             }
-            for i, (chunk, text, embedding) in enumerate(
-                zip(chunks, cleaned_texts, embedded_chunks)
-            )
-        ]
+            prepared_data.append(payload)
+
+        return prepared_data
 
     async def extract_keywords(
         self, query: str, rules: list[Rule], llm_service: CompletionService

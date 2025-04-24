@@ -82,7 +82,9 @@ export const resolvedEntitiesSchema = z.union([
 const queryResponseSchema = z.object({
   answer: z.object({ answer: answerSchema }),
   chunks: z.array(chunkSchema),
-  resolved_entities: resolvedEntitiesSchema
+  resolved_entities: resolvedEntitiesSchema,
+  citations: z.array(z.number()),
+  reasoning: z.string().nullable().optional()
 });
 
 // Update the runQuery function to transform the data format
@@ -142,7 +144,9 @@ export async function runQuery(
   return {
     answer: parsed.answer,
     chunks: parsed.chunks,
-    resolvedEntities
+    resolvedEntities,
+    citations: parsed.citations,
+    reasoning: parsed.reasoning
   };
 }
 

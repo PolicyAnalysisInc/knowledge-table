@@ -44,11 +44,13 @@ class VectorResponseSchema(BaseModel):
 
 
 class QueryResult(BaseModel):
-    """Query result schema."""
+    """Query result schema returned by internal query services."""
 
     answer: Any
     chunks: List[Chunk]
+    citations: List[int]
     resolved_entities: Optional[List[ResolvedEntitySchema]] = None
+    reasoning: Optional[str] = None
 
 
 class QueryResponseSchema(BaseModel):
@@ -60,11 +62,12 @@ class QueryResponseSchema(BaseModel):
     answer: Optional[Any] = None
     chunks: List[Chunk]
     type: str
+    citations: List[str]
     resolved_entities: Optional[List[ResolvedEntitySchema]] = None
 
 
 class QueryAnswer(BaseModel):
-    """Query answer model."""
+    """Query answer model (part of the final API response)."""
 
     id: str
     document_id: str
@@ -74,12 +77,23 @@ class QueryAnswer(BaseModel):
 
 
 class QueryAnswerResponse(BaseModel):
-    """Query answer response model."""
+    """Query answer response model (the final API response structure)."""
 
     answer: QueryAnswer
     chunks: List[Chunk]
+    citations: List[int]
     resolved_entities: Optional[List[ResolvedEntitySchema]] = None
+    reasoning: Optional[str] = None
 
 
 # Type for search responses (used in service layer)
 SearchResponse = Union[dict[str, List[Chunk]], VectorResponseSchema]
+
+# Assuming VectorResponseSchema is defined elsewhere or replacing with appropriate type
+# If VectorResponseSchema is not defined, this might need adjustment.
+# For now, let's define a placeholder if it's missing:
+try:
+    from app.schemas.vector_db import VectorResponseSchema # Adjust import path if necessary
+except ImportError:
+    class VectorResponseSchema(BaseModel): # Placeholder
+        chunks: List[Chunk]

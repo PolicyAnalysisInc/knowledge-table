@@ -60,11 +60,11 @@ async def test_multi_completion_first_success(
     )
 
     # Define results for each call
-    result1 = DummyResponse(answer="Success1", confidence=9, reasoning="Reason1")
+    result1 = DummyResponse(answer="Success1", confidence=9, reasoning="Reason1", citations=[])
     result2 = None
-    result3 = DummyResponse(answer="Success3", confidence=7, reasoning="Reason3")
+    result3 = DummyResponse(answer="Success3", confidence=7, reasoning="Reason3", citations=[1])
     # Add a 4th result for the judge call (expecting IntResponseModel)
-    judge_result = IntResponseModel(answer=0, confidence=10, reasoning="Judge chose 0") # Judge selects the first candidate (index 0)
+    judge_result = IntResponseModel(answer=0, confidence=10, reasoning="Judge chose 0", citations=[]) # Judge selects the first candidate (index 0)
     mock_parent_generate.side_effect = [result1, result2, result3, judge_result]
 
     keys = ["key1", "key2", "key3"]
@@ -105,11 +105,11 @@ async def test_multi_completion_later_success(
 
     # Define results for each call
     result1 = None
-    result2 = DummyResponse(answer="Success2", confidence=8, reasoning="Reason2")
-    result3 = DummyResponse(answer="Success3", confidence=7, reasoning="Reason3") # Another success
+    result2 = DummyResponse(answer="Success2", confidence=8, reasoning="Reason2", citations=[])
+    result3 = DummyResponse(answer="Success3", confidence=7, reasoning="Reason3", citations=[2]) # Another success
     # Add a 4th result for the judge call (expecting IntResponseModel)
     # Judge sees [result2, result3], selects index 0 (result2)
-    judge_result = IntResponseModel(answer=0, confidence=10, reasoning="Judge chose 0") 
+    judge_result = IntResponseModel(answer=0, confidence=10, reasoning="Judge chose 0", citations=[])
     mock_parent_generate.side_effect = [result1, result2, result3, judge_result]
 
     keys = ["key1", "key2", "key3"]
@@ -184,7 +184,7 @@ async def test_multi_completion_invalid_key(
     )
 
     # Define results only for the valid keys
-    result1 = DummyResponse(answer="Success1", confidence=9, reasoning="Reason1")
+    result1 = DummyResponse(answer="Success1", confidence=9, reasoning="Reason1", citations=[])
     result3 = None # Third key (key3) is valid but returns None
     mock_parent_generate.side_effect = [result1, result3] # Only two actual calls expected
 
@@ -234,7 +234,7 @@ async def test_multi_completion_default_keys(
     # Logs showed gemini-2.5-flash call resulted in None
     # Logs showed gpt-4.1-mini call succeeded
     mock_result_gemini_flash = None
-    mock_result_gpt41_mini = DummyResponse(answer="SuccessMini", confidence=9, reasoning="ReasonMini")
+    mock_result_gpt41_mini = DummyResponse(answer="SuccessMini", confidence=9, reasoning="ReasonMini", citations=[])
     mock_parent_generate.side_effect = [
         mock_result_gemini_flash, # For gemini-2.5-flash call
         mock_result_gpt41_mini  # For gpt-4.1-mini call
@@ -291,7 +291,7 @@ async def test_multi_completion_single_key_compatibility(
     # Define result for the single call
     key_to_use = "key2"
     config_to_use = mock_llm_configs[key_to_use]
-    expected_parent_result = DummyResponse(answer="SingleSuccess", confidence=10, reasoning="SingleReason")
+    expected_parent_result = DummyResponse(answer="SingleSuccess", confidence=10, reasoning="SingleReason", citations=[])
     mock_parent_generate.return_value = expected_parent_result # Only one call expected
 
     expected_results_list = [expected_parent_result]

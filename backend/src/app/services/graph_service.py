@@ -120,26 +120,11 @@ async def generate_triples(
             relationship, table_data
         )
 
-        # for triple in triples_for_relationship:
-        #     print(f"Triple: {triple}")
-        #     head_node = Node(
-        #         label=relationship.head,
-        #         name=str(triple.head.name)
-        #     )
-        #     tail_node = Node(
-        #         label=relationship.tail,
-        #         name=str(triple.tail.name)
-        #     )
-        #     relation = Relation(name=relationship.relation)
-        #     triples.append(
-        #         Triple(
-        #             triple_id=str(uuid.uuid4()),
-        #             head=head_node,
-        #             tail=tail_node,
-        #             relation=relation,
-        #             chunk_ids=[],
-        #         )
-        #     )
+        # Uncomment the block to collect triples
+        for triple in triples_for_relationship:
+            logger.debug(f"Generated triple: {triple}")
+            # Ensure nodes and relations are correctly formed if needed, but triple object should be fine
+            triples.append(triple) # Append the generated triple to the main list
 
         chunks.extend(
             generate_chunks_for_triples(triples_for_relationship, table_data)
@@ -147,8 +132,9 @@ async def generate_triples(
 
     logger.info(f"Generated {len(triples)} triples and {len(chunks)} chunks")
 
+    # Return the collected triples list
     return ExportTriplesResponseSchema(
-        triples=triples_for_relationship, chunks=chunks
+        triples=triples, chunks=chunks
     )
 
 
@@ -411,18 +397,10 @@ async def process_table_and_generate_triples(
             logger.error("Failed to generate schema: Invalid schema result")
             return ExportTriplesResponseSchema(triples=[], chunks=[])
 
-        # Convert the schema to a SchemaResponseModel
-        schema_dict = schema_result["schema"]
-        schema = SchemaResponseModel(
-            relationships=[
-                SchemaRelationship(**rel)
-                for rel in schema_dict.get("relationships", [])
-            ],
-            confidence=schema_dict.get("confidence"),
-            reasoning=schema_dict.get("reasoning")
-        )
+        # Directly use the schema model from the result dictionary
+        schema: SchemaResponseModel = schema_result["schema"]
 
-        logger.info("Generated Schema:")
+        logger.info("Using Generated Schema:")
         logger.info(json.dumps(schema.model_dump(), indent=2))
 
         if not schema.relationships:
