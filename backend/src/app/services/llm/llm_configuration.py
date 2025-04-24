@@ -60,27 +60,26 @@ llm_configs: dict[str, LLMConfig] = {
     "o1": LLMConfig(model_name="o1", provider="openai", settings={}),
     "o3": LLMConfig(model_name="o3", provider="openai", settings={}),
     "o3-mini": LLMConfig(model_name="o3-mini", provider="openai", settings={}),
-    "o4-mini": LLMConfig(model_name="gpt-4o-mini", provider="openai", settings={}), # Assuming gpt-4o-mini
+    "o4-mini": LLMConfig(model_name="o4-mini", provider="openai", settings={}), # Assuming gpt-4o-mini
     "o1-high": LLMConfig(model_name="o1", provider="openai", settings={"reasoning_effort": "high"}),
     "o3-high": LLMConfig(model_name="o3", provider="openai", settings={"reasoning_effort": "high"}),
     "o3-mini-high": LLMConfig(model_name="o3-mini", provider="openai", settings={"reasoning_effort": "high"}),
-    "o4-mini-high": LLMConfig(model_name="gpt-4o-mini", provider="openai", settings={"reasoning_effort": "high"}), # Assuming gpt-4o-mini
-    "gpt-4.1": LLMConfig(model_name="gpt-4.1", provider="openai", settings={"max_tokens": 120000}),
+    "o4-mini-high": LLMConfig(model_name="o4-mini", provider="openai", settings={"reasoning_effort": "high"}), # Assuming gpt-4o-mini
+    "gpt-4.1": LLMConfig(model_name="gpt-4.1", provider="openai"),
     "gpt-4.1-mini": LLMConfig(model_name="gpt-4.1-mini-2025-04-14", provider="openai", settings={}),
     "gpt-4.1-nano": LLMConfig(model_name="gpt-4.1-nano-2025-04-14", provider="openai", settings={}),
-    "gpt-4o": LLMConfig(model_name="gpt-4o", provider="openai", settings={"max_tokens": 60000}),
+    "gpt-4o": LLMConfig(model_name="gpt-4o", provider="openai"),
 
     # Anthropic Models
     "claude-3-5-sonnet": LLMConfig(
         model_name='claude-3-5-sonnet-20241022', 
         provider="anthropic", 
-        settings={"max_tokens": 128000}
+        settings={}
     ),
     "claude-3-7-sonnet": LLMConfig(
         model_name='claude-3-7-sonnet-20250219', 
         provider="anthropic", 
         settings={
-            "max_tokens": 128000,
             "thinking": {
                 "type": "enabled",
                 "budget_tokens": 32000

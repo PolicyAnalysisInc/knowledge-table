@@ -2,7 +2,8 @@
 
 import asyncio
 import logging
-from typing import Any, List, Optional, Type, Dict
+import json
+from typing import Any, List, Optional, Type, Dict, Tuple
 
 from pydantic import BaseModel, create_model
 from pydantic_core import PydanticUndefined
@@ -10,10 +11,12 @@ from pydantic_ai import Agent
 
 # Import the configuration function and type AND the configs dictionary
 from app.services.llm.llm_configuration import LLMConfig, get_active_llm_config, llm_configs
+# Import the new judge prompt
+from app.services.llm.openai_prompts import JUDGE_RESPONSE_PROMPT
 
 from app.core.config import Settings
 from app.services.llm.base import CompletionService
-from app.models.llm_responses import BaseResponseModel, SubQueriesResponseModel # Added for decompose_query matching
+from app.models.llm_responses import BaseResponseModel, SubQueriesResponseModel, IntResponseModel
 
 logger = logging.getLogger(__name__)
 
@@ -134,8 +137,8 @@ class PydanticCompletionService(CompletionService):
 
 class PydanticMultiCompletionService(PydanticCompletionService):
     """
-    A service that overrides PydanticCompletionService to run completions in parallel
-    and selects the first successful result, populating the 'all_responses' field.
+    A service that overrides PydanticCompletionService to run completions in parallel,
+    uses an LLM judge to select the best response, and populates the 'all_responses' field.
     """
     def __init__(self, settings: Settings):
         """
@@ -147,6 +150,84 @@ class PydanticMultiCompletionService(PydanticCompletionService):
         super().__init__(settings)
         logger.info("PydanticMultiCompletionService initialized.")
 
+    async def _select_best_response_with_judge(
+        self,
+        original_prompt: str,
+        successful_responses_with_info: List[Tuple[int, BaseResponseModel, str, Optional[LLMConfig]]],
+        successful_response_map: Dict[int, Tuple[int, BaseResponseModel, str, Optional[LLMConfig]]]
+    ) -> Tuple[Optional[BaseResponseModel], str]:
+        """
+        Uses an LLM judge to select the best response from multiple successful candidates.
+
+        Args:
+            original_prompt: The original prompt (including query and context) sent to the models.
+            successful_responses_with_info: List of (original_index, response, key, config) tuples.
+            successful_response_map: Dictionary mapping judge index to original info tuple.
+
+        Returns:
+            A tuple containing the selected BaseResponseModel (or None if judge fails)
+            and a string describing the selection reason.
+        """
+        logger.info(f"Using LLM judge to select the best from {len(successful_responses_with_info)} successful responses.")
+        selected_response: Optional[BaseResponseModel] = None
+        selected_reason = "Judge selection process initiated."
+
+        # Prepare candidates for the judge prompt
+        judge_candidates = []
+        for judge_idx, (original_idx, response, key, config) in enumerate(successful_responses_with_info):
+            judge_candidates.append({
+                "index": judge_idx, # 0-based index for the judge
+                "model_key": key,
+                "response": response.model_dump(exclude={'all_responses'}) # Exclude nested field
+            })
+
+        # Format the judge prompt using the template
+        judge_prompt = JUDGE_RESPONSE_PROMPT.substitute(
+            original_query=original_prompt,
+            candidate_responses_json=json.dumps(judge_candidates, indent=2)
+        )
+
+        try:
+            judge_config = get_active_llm_config() # Use default active config for judge
+            logger.info(f"Calling judge LLM (config: {judge_config.provider}/{judge_config.model_name}) to choose best response.")
+
+            # Use super().generate_completion for the judge call
+            judge_llm_response: Optional[IntResponseModel] = await super().generate_completion(
+                prompt=judge_prompt,
+                response_model=IntResponseModel, # Expecting {"answer": index}
+                llm_config_override=judge_config
+            )
+
+            if judge_llm_response and judge_llm_response.answer is not None:
+                chosen_judge_index = judge_llm_response.answer
+
+                if chosen_judge_index in successful_response_map:
+                    original_index, response, key, config = successful_response_map[chosen_judge_index]
+                    selected_response = response
+                    selected_reason = f"Judge selected response from index {chosen_judge_index} (original key: '{key}')."
+                    logger.info(selected_reason)
+                else:
+                    logger.warning(f"Judge returned invalid index {chosen_judge_index}. Falling back to first successful response.")
+                    # Fallback logic: Select the first successful response
+                    original_index, response, key, config = successful_responses_with_info[0]
+                    selected_response = response
+                    selected_reason = f"Judge returned invalid index. Selected first successful response (key: '{key}')."
+            else:
+                logger.warning("Judge LLM call failed or returned invalid data. Falling back to first successful response.")
+                # Fallback logic: Select the first successful response
+                original_index, response, key, config = successful_responses_with_info[0]
+                selected_response = response
+                selected_reason = f"Judge call failed. Selected first successful response (key: '{key}')."
+
+        except Exception as judge_e:
+            logger.error(f"Error during judge LLM call: {judge_e}", exc_info=True)
+            # Fallback logic: Select the first successful response
+            original_index, response, key, config = successful_responses_with_info[0]
+            selected_response = response
+            selected_reason = f"Exception during judge call. Selected first successful response (key: '{key}')."
+
+        return selected_response, selected_reason
+
     # Override the parent method
     async def generate_completion(
         self,
@@ -156,9 +237,9 @@ class PydanticMultiCompletionService(PydanticCompletionService):
     ) -> Optional[BaseResponseModel]:
         """
         Overrides the parent method to generate multiple completions in parallel
-        using different LLM configurations specified by llm_config_keys.
-        It selects the first successful one, populates its 'all_responses' field,
-        and returns it.
+        using different LLM configurations. It then uses an LLM judge to select
+        the best response based on accuracy, reasoning, and confidence. The chosen
+        response's 'all_responses' field is populated with all initial results.
 
         Args:
             prompt: The input prompt for the LLM.
@@ -169,96 +250,122 @@ class PydanticMultiCompletionService(PydanticCompletionService):
                              if None is provided.
 
         Returns:
-            The first non-None Pydantic model instance from the parallel calls,
-            with its `all_responses` attribute populated. Returns None if all calls fail.
+            The best Pydantic model instance selected by the judge LLM,
+            with its `all_responses` attribute populated. Returns None if all
+            initial calls fail or if the judge process fails unexpectedly.
         """
         # Set default list if None is provided
         if llm_config_keys is None:
             llm_config_keys = [
-                "gemini-2.5",
+                "o4-mini",
                 "gemini-2.5-flash",
-                "gpt-4o",
-                "gpt-4.1-mini"
+                "gpt-4.1-mini",
+                "gpt-4.1-nano"
             ]
 
-        num_runs = len(llm_config_keys)
-        if num_runs == 0:
+        num_keys = len(llm_config_keys)
+        if num_keys == 0:
             logger.warning("generate_completion called with empty llm_config_keys list.")
             return None
 
-        logger.info(f"Starting {num_runs} parallel completions for prompt: '{prompt[:50]}...' with configs: {llm_config_keys}")
+        logger.info(f"Starting {num_keys} parallel completions for prompt: '{prompt[:50]}...' with configs: {llm_config_keys}")
 
         tasks = []
-        valid_keys_configs = [] # Keep track of which configs were used for results length
+        config_map = {} # Map task index to config info {task_idx: (key, config)}
 
         # Create tasks, looking up config for each key
-        for key in llm_config_keys:
+        for i, key in enumerate(llm_config_keys):
             config = llm_configs.get(key)
             if not config:
-                logger.error(f"Invalid LLM configuration key '{key}' provided. Skipping this run.")
-                # Add a placeholder task that returns None immediately? Or just skip?
-                # Skipping means the results list length might not match keys length if keys are invalid.
-                # Let's add a placeholder task for consistent output length.
-                async def none_task(): return None
-                tasks.append(none_task())
-                valid_keys_configs.append(None) # Placeholder for config
+                logger.warning(f"Invalid LLM configuration key '{key}' provided. This run will be skipped.")
+                # Create a task that immediately returns None for skipped/invalid keys
+                async def skipped_task(): return None
+                tasks.append(skipped_task())
+                config_map[i] = (key, None) # Mark config as None for this index
                 continue
 
-            valid_keys_configs.append(config) # Store the config used
+            config_map[i] = (key, config) # Store key and config
             tasks.append(
                 super().generate_completion(
                     prompt=prompt,
                     response_model=response_model,
-                    llm_config_override=config, # Use the specific config for this task
+                    llm_config_override=config,
                 )
             )
 
-        # Initialize results based on the number of keys provided
-        results: List[Optional[BaseResponseModel]] = [None] * len(llm_config_keys)
+        # Run tasks concurrently and gather results (including exceptions)
         try:
-            # Run tasks concurrently and gather results
             gathered_results = await asyncio.gather(*tasks, return_exceptions=True)
+        except Exception as gather_e:
+            logger.error(f"Unexpected error during asyncio.gather: {gather_e}", exc_info=True)
+            gathered_results = [gather_e] * len(tasks) # Assume all failed if gather fails
 
-            # Process results, separating successful models from exceptions/Nones
-            processed_results: List[Optional[BaseResponseModel]] = []
-            for i, res in enumerate(gathered_results):
-                config_used = valid_keys_configs[i] # Get config used for this index
-                key_used = llm_config_keys[i]
-                log_prefix = f"Task {i} (key: '{key_used}', config: {config_used.model_name if config_used else 'InvalidKey'}) for prompt '{prompt[:50]}...'"
+        # --- Process Results ---
+        all_results_list: List[Optional[BaseResponseModel]] = [None] * len(tasks)
+        successful_responses_with_info = [] # List of tuples: (index, response, key, config)
 
-                if isinstance(res, Exception):
-                    logger.error(f"{log_prefix} failed with exception: {res}", exc_info=res)
-                    processed_results.append(None)
-                elif res is None:
-                     logger.warning(f"{log_prefix} returned None.")
-                     processed_results.append(None)
-                elif isinstance(res, BaseResponseModel):
-                     processed_results.append(res)
-                else:
-                    # Log error for unexpected return types (e.g., from none_task)
-                    if res is not None: # Avoid logging expected None from invalid key placeholder
-                         logger.error(f"{log_prefix} returned unexpected type: {type(res)}")
-                    processed_results.append(None)
-            results = processed_results # Update results with processed list
+        for i, res in enumerate(gathered_results):
+            key, config = config_map[i]
+            log_prefix = f"Task {i} (key: '{key}', config: {config.model_name if config else 'Skipped'})"
 
-        except Exception as e:
-            # Catch potential errors during the gather setup itself
-            logger.error(
-                f"Unexpected error during parallel completion gather setup for prompt '{prompt[:50]}...': {e}",
-                exc_info=True
-            )
-            # results remains [None] * num_runs
+            if isinstance(res, Exception):
+                logger.error(f"{log_prefix} failed with exception: {res}", exc_info=isinstance(res, BaseException))
+                all_results_list[i] = None # Store None for errors
+            elif isinstance(res, BaseResponseModel):
+                logger.info(f"{log_prefix} succeeded.")
+                all_results_list[i] = res # Store successful response
+                successful_responses_with_info.append((i, res, key, config))
+            else: # Includes None results from skipped tasks or failed completions
+                 if config: # Only log warning if it wasn't an intentionally skipped task
+                     logger.warning(f"{log_prefix} returned None or unexpected type: {type(res)}.")
+                 all_results_list[i] = None # Store None
 
-        # Find the first non-None result from the processed list
-        first_result: Optional[BaseResponseModel] = next((res for res in results if res is not None), None)
+        # --- Select Best Response ---
+        num_successful = len(successful_responses_with_info)
+        selected_response: Optional[BaseResponseModel] = None
+        selected_reason = "No successful responses."
 
-        if first_result:
-            logger.info(f"Selected first successful result for prompt: '{prompt[:50]}...'")
-            # Assign the full list of responses to the field in the chosen result
-            first_result.all_responses = results
-            logger.debug(f"Assigned 'all_responses' field to the chosen result.")
+        if num_successful == 0:
+            logger.warning(f"All {len(tasks)} completion attempts failed or returned None for prompt: '{prompt[:50]}...'")
+            return None # No responses to choose from
+
+        elif num_successful == 1:
+            original_index, response, key, config = successful_responses_with_info[0]
+            selected_response = response
+            selected_reason = f"Only one successful response (from key: '{key}')."
+            logger.info(selected_reason)
+
         else:
-            logger.warning(f"All {num_runs} completion attempts failed or returned None for prompt: '{prompt[:50]}...'")
+            # --- LLM Judge Selection ---
+            logger.info(f"Multiple ({num_successful}) successful responses obtained. Using LLM judge to select the best.")
 
-        # Return the chosen result (type Optional[BaseResponseModel], with populated all_responses) or None
-        return first_result 
+            # Prepare candidates for the judge prompt
+            judge_candidates = []
+            successful_response_map = {} # Map judge index back to original info
+            for judge_idx, (original_idx, response, key, config) in enumerate(successful_responses_with_info):
+                judge_candidates.append({
+                    "index": judge_idx, # 0-based index for the judge
+                    "model_key": key,
+                    "response": response.model_dump(exclude={'all_responses'}) # Exclude nested field
+                })
+                successful_response_map[judge_idx] = (original_idx, response, key, config)
+
+            # Call the helper method to select the best response
+            selected_response, selected_reason = await self._select_best_response_with_judge(
+                original_prompt=prompt, # Pass original prompt
+                successful_responses_with_info=successful_responses_with_info,
+                successful_response_map=successful_response_map
+            )
+
+        # --- Finalize and Return ---
+        if selected_response:
+            # Assign the full list of original results to the chosen response
+            # Ensure all_responses is serializable (contains models or None)
+            selected_response.all_responses = all_results_list
+            logger.debug(f"Assigned 'all_responses' field to the chosen result. Selection reason: {selected_reason}")
+            return selected_response
+        else:
+            # This case should ideally not be reached if num_successful > 0, but as a safeguard:
+            logger.error("Failed to select a final response despite having successful candidates. Returning None.")
+            return None
+

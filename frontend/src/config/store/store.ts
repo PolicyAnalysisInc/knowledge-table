@@ -400,41 +400,42 @@ export const useStore = create<Store>()(
           }
           if (shouldRunQuery) {
             // Inside runQuery.then callback in rerunCells:
-            runQuery(row, column, globalRules).then(({ answer, chunks, resolvedEntities }) => {
-              editCells(
-                [{ rowId: row.id, columnId: column.id, cell: answer.answer }],
-                activeTableId
-              );
-              
-              // Get current state
-              const currentTable = getTable(activeTableId);
-              
-              // Helper to check if an entity matches any global rule patterns
-              const isGlobalEntity = (entity: { 
-                original: string | string[]; 
-                resolved: string | string[]; 
-                source?: { type: string; id: string }; 
-                entityType?: string 
-              }) => {
-                const originalText = Array.isArray(entity.original) 
-                  ? entity.original.join(' ') 
-                  : entity.original;
-                  
-                return globalRules.some(rule => 
-                  rule.type === 'resolve_entity' && 
-                  rule.options?.some(pattern => 
-                    originalText.toLowerCase().includes(pattern.toLowerCase())
-                  )
+            runQuery(row, column, globalRules)
+              .then(({ answer, chunks, resolvedEntities }) => {
+                editCells(
+                  [{ rowId: row.id, columnId: column.id, cell: answer.answer }],
+                  activeTableId
                 );
-              };
-              
-              editTable(activeTableId, {
-                chunks: { ...currentTable.chunks, [key]: chunks },
-                loadingCells: omit(currentTable.loadingCells, key),
-                columns: currentTable.columns.map(col => ({
-                  ...col,
-                  resolvedEntities: col.id === column.id 
-                    ? [
+
+                // Get current state
+                const currentTable = getTable(activeTableId);
+
+                // Helper to check if an entity matches any global rule patterns
+                const isGlobalEntity = (entity: {
+                  original: string | string[];
+                  resolved: string | string[];
+                  source?: { type: string; id: string };
+                  entityType?: string
+                }) => {
+                  const originalText = Array.isArray(entity.original)
+                    ? entity.original.join(' ')
+                    : entity.original;
+
+                  return globalRules.some(rule =>
+                    rule.type === 'resolve_entity' &&
+                    rule.options?.some(pattern =>
+                      originalText.toLowerCase().includes(pattern.toLowerCase())
+                    )
+                  );
+                };
+
+                editTable(activeTableId, {
+                  chunks: { ...currentTable.chunks, [key]: chunks },
+                  loadingCells: omit(currentTable.loadingCells, key),
+                  columns: currentTable.columns.map(col => ({
+                    ...col,
+                    resolvedEntities: col.id === column.id
+                      ? [
                         ...(col.resolvedEntities || []),
                         ...(resolvedEntities || [])
                           .filter(entity => !isGlobalEntity(entity))
@@ -447,12 +448,12 @@ export const useStore = create<Store>()(
                             }
                           })) as ResolvedEntity[]
                       ]
-                    : (col.resolvedEntities || [])
-                })),
-                globalRules: currentTable.globalRules.map(rule => ({
-                  ...rule,
-                  resolvedEntities: rule.type === 'resolve_entity'
-                    ? [
+                      : (col.resolvedEntities || [])
+                  })),
+                  globalRules: currentTable.globalRules.map(rule => ({
+                    ...rule,
+                    resolvedEntities: rule.type === 'resolve_entity'
+                      ? [
                         ...(rule.resolvedEntities || []),
                         ...(resolvedEntities || [])
                           .filter(entity => isGlobalEntity(entity))
@@ -465,10 +466,17 @@ export const useStore = create<Store>()(
                             }
                           })) as ResolvedEntity[]
                       ]
-                    : (rule.resolvedEntities || [])
-                }))
+                      : (rule.resolvedEntities || [])
+                  }))
+                });
+              })
+              .catch(error => {
+                console.error(`Failed during runQuery or processing for cell ${key}:`, error);
+                // Ensure loading state is cleared for this specific cell on error
+                editTable(activeTableId, {
+                  loadingCells: omit(getTable(activeTableId).loadingCells, key)
+                });
               });
-            });
           } else {
             editTable(activeTableId, {
               loadingCells: omit(getTable(activeTableId).loadingCells, key)
@@ -594,7 +602,7 @@ export const useStore = create<Store>()(
             globalRules: table.globalRules.map(rule => ({ ...rule, resolvedEntities: [] }))
           });
         }
-      }
+      },
     }),
     {
       name: "store",

@@ -197,3 +197,28 @@ Your response MUST be a JSON object with two fields: 'relationships' and 'confid
 **Schema Relationships** (JSON object with 'relationships' and 'confidence' fields):
 """.format(confidence_instruction=CONFIDENCE_INSTRUCTION)
 )
+
+JUDGE_RESPONSE_PROMPT = Template(
+    """
+You are an expert evaluator. Your task is to analyze multiple responses generated for the same query and select the single best response based on accuracy, completeness, adherence to instructions (if any implied by the query), reasoning quality, and confidence score.
+
+Original Query (including context/chunks):
+---
+$original_query
+---
+
+Candidate Responses (evaluate these):
+---
+$candidate_responses_json
+---
+
+Instructions:
+1. Review each candidate response carefully.
+2. Compare them against the original query, paying close attention to the context/chunks provided within the query.
+3. Evaluate them based on accuracy, reasoning, and confidence **relative to the provided context**.
+4. Choose the index (the 'index' field in the JSON above) of the single best response.
+5. Respond with a JSON object containing ONLY the field 'answer', which MUST be the 0-based index of the best response you selected.
+
+Respond ONLY with the JSON object: {{\"answer\": <chosen_index>}}
+"""
+)

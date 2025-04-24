@@ -1,5 +1,5 @@
 # TODO
-- Set up MongoDB and persist state to it
-- Modify response format to include confidence
 - Modify repsonse format to include cited chunks
-- Better agent names for logfire
+
+- S3 Document upload
+- Generate Highlighted Citation Images
