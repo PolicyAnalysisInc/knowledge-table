@@ -20,8 +20,20 @@ import { cn } from "@utils/functions";
 import classes from "./index.module.css";
 
 export function KtTable(props: BoxProps) {
-  const columns = useStore(store => store.getTable().columns);
-  const rows = useStore(store => store.getTable().rows);
+  const columns = useStore(state => state.getTable().columns);
+  const rows = useStore(state => state.getTable().rows);
+
+  // --- DEBUG LOGGING START ---
+  console.log("[KtTable] Received rows from store:", rows);
+  // If you know the specific row/column ID being changed, log it:
+  // const testRowId = '...'; // Replace with actual ID
+  // const testColId = '...'; // Replace with actual ID
+  // const testRow = rows.find(r => r.id === testRowId);
+  // if (testRow) {
+  //   console.log(`[KtTable] Value for ${testRowId} / ${testColId}:`, testRow.cells[testColId]);
+  // }
+  // --- DEBUG LOGGING END ---
+
   const visibleColumns = useMemo(
     () => columns.filter(column => !column.hidden),
     [columns]
@@ -41,31 +53,43 @@ export function KtTable(props: BoxProps) {
   );
 
   const gridRows = useMemo<Row<Cell>[]>(
-    () => [
-      {
-        rowId: HEADER_ROW_ID,
-        cells: [
-          { type: "header", text: "" },
-          ...visibleColumns.map<KtColumnCell>(column => ({
-            type: "kt-column",
-            column
-          }))
-        ]
-      },
-      ...visibleRows.map<Row<Cell>>(row => ({
-        rowId: row.id,
-        height: 48,
-        cells: [
-          { type: "kt-row", row },
-          ...visibleColumns.map<KtCell>(column => ({
-            type: "kt-cell",
-            column,
-            row,
-            cell: row.cells[column.id]
-          }))
-        ]
-      }))
-    ],
+    () => {
+      console.log("[KtTable] Recalculating gridRows..."); // Log when memo recalculates
+      return [
+        {
+          rowId: HEADER_ROW_ID,
+          cells: [
+            { type: "header", text: "" },
+            ...visibleColumns.map<KtColumnCell>(column => ({
+              type: "kt-column",
+              column
+            }))
+          ]
+        },
+        ...visibleRows.map<Row<Cell>>(row => ({
+          rowId: row.id,
+          key: `${row.id}-${JSON.stringify(row.cells)}`,
+          height: 48,
+          cells: [
+            { type: "kt-row", row },
+            ...visibleColumns.map<KtCell>(column => {
+              // --- DEBUG LOGGING START ---
+              // Log the specific cell value being passed to the grid cell object
+              // if (row.id === testRowId && column.id === testColId) { 
+              //   console.log(`[KtTable gridRows Memo] Mapping cell value for ${row.id}/${column.id}:`, row.cells[column.id]);
+              // }
+              // --- DEBUG LOGGING END ---
+              return {
+                type: "kt-cell",
+                column,
+                row,
+                cell: row.cells[column.id]
+              };
+            })
+          ]
+        }))
+      ];
+    },
     [visibleRows, visibleColumns]
   );
 

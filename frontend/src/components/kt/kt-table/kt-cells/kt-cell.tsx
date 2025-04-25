@@ -82,14 +82,24 @@ export class KtCellTemplate implements CellTemplate<KtCell> {
     isInEditMode: boolean,
     onCellChanged: (cell: Compatible<KtCell>, commit: boolean) => void
   ) {
+    // --- DEBUG LOGGING START ---
+    console.log(`[KtCellTemplate render] Received cell for row ${cell.row.id}, col ${cell.column.id}. Value:`, cell.cell, 'Full cell prop:', cell);
+    // --- DEBUG LOGGING END ---
+
     const handleChange = (cellValue: CellValue, commit = false) => {
       onCellChanged(
         this.getCompatibleCell({ ...cell, cell: cellValue }),
         commit
       );
     };
+    const cellValueKey = JSON.stringify(cell.cell) ?? 'null-or-undefined';
     return (
-      <Content cell={cell} editMode={isInEditMode} onChange={handleChange} />
+      <Content
+        key={cellValueKey}
+        cell={cell}
+        editMode={isInEditMode}
+        onChange={handleChange}
+      />
     );
   }
 }

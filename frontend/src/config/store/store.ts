@@ -23,7 +23,7 @@ import {
   isArrayType,
   getSingularType
 } from "./store.utils";
-import { AnswerTableRow, ResolvedEntity, SourceData, Store } from "./store.types";
+import { AnswerTableRow, ResolvedEntity, SourceData, Store, CellDetails, CellKey } from "./store.types";
 import { runQuery, uploadFile } from "../api";
 import { insertAfter, insertBefore, where } from "@utils/functions";
 
@@ -279,9 +279,19 @@ export const useStore = create<Store>()(
       },
 
       deleteRows: ids => {
-        const { getTable, editActiveTable } = get();
-        editActiveTable({
-          rows: getTable().rows.filter(r => !ids.includes(r.id))
+        const { activeTableId, getTable, editTable } = get();
+        const table = getTable(activeTableId);
+        const nextRows = table.rows.filter(row => !ids.includes(row.id));
+        // Clean up cellDetails for deleted rows
+        const nextCellDetails = { ...table.cellDetails };
+        ids.forEach(rowId => {
+          table.columns.forEach(col => {
+            delete nextCellDetails[getCellKey(rowId, col)];
+          });
+        });
+        editTable(activeTableId, {
+          rows: nextRows,
+          cellDetails: nextCellDetails
         });
       },
 
@@ -649,6 +659,85 @@ export const useStore = create<Store>()(
 
       closeCompareModal: () => {
         set({ compareModalOpen: false, compareModalCellKey: null });
+      },
+
+      // New action to select an answer from the comparison modal
+      selectAnswerFromComparison: (cellKey: string, responseIndex: number) => {
+        const { activeTableId, getTable, editTable } = get();
+        const table = getTable(activeTableId);
+        const cellDetails = table.cellDetails[cellKey as keyof typeof table.cellDetails];
+
+        // Ensure cellDetails and all_responses exist and are an array
+        if (!cellDetails || !Array.isArray(cellDetails.all_responses)) {
+            console.error("Cell details or all_responses not found or not an array");
+            return;
+        }
+
+        // Filter out null responses and map to update is_selected_answer
+        const newAllResponses = cellDetails.all_responses
+          .filter((resp): resp is NonNullable<typeof resp> => resp !== null)
+          .map((resp, index) => ({
+            ...resp,
+            is_selected_answer: index === responseIndex
+          }));
+        
+        // Check if the target index is valid within the filtered/mapped array
+        if (responseIndex < 0 || responseIndex >= newAllResponses.length) {
+          console.error("Invalid response index after filtering nulls");
+          return; 
+        }
+
+        const selectedResponse = newAllResponses[responseIndex];
+        // selectedResponse is guaranteed non-null here
+
+        // Update CellDetails based on the selected response from all_responses
+        const updatedCellDetails: CellDetails = {
+          ...cellDetails, // Keep existing chunks, resolvedEntities etc.
+          // Update fields that exist at the top level of CellDetails
+          reasoning: selectedResponse.reasoning,
+          citations: selectedResponse.citations,
+          // Update the nested answer object
+          answer: { 
+            answer: selectedResponse.answer 
+          },
+          // Update the all_responses array with the new selection state
+          all_responses: newAllResponses,
+          // NOTE: confidence, model_name, is_selected_answer are NOT top-level fields in CellDetails
+          // They only exist within the objects inside the all_responses array.
+        };
+
+        // Update the cell value in the corresponding row
+        const [rowId, columnId] = cellKey.split('-');
+        const updatedRows = table.rows.map(row => {
+          if (row.id === rowId) {
+            // Create a completely new row object
+            const newRow = {
+              ...row,
+              // Create a completely new cells object
+              cells: {
+                ...row.cells,
+                [columnId]: selectedResponse.answer
+              }
+            };
+            // --- DEBUG LOGGING START ---
+            console.log(`[Store selectAnswer] Updating row ${rowId}, column ${columnId} to:`, selectedResponse.answer, 'New row object:', newRow);
+            // --- DEBUG LOGGING END ---
+            return newRow;
+          }
+          return row; // Return original row reference if no change
+        });
+
+        // --- DEBUG LOGGING START ---
+        console.log('[Store selectAnswer] updatedRows array before editTable:', updatedRows);
+        // --- DEBUG LOGGING END ---
+
+        editTable(activeTableId, {
+          cellDetails: {
+            ...table.cellDetails,
+            [cellKey]: updatedCellDetails
+          },
+          rows: updatedRows // Update the rows with the new cell value
+        });
       },
     }),
     {

@@ -70,6 +70,7 @@ export interface Store {
   compareModalCellKey: CellKey | null;
   openCompareModal: (cell: { rowId: string; columnId: string }) => void;
   closeCompareModal: () => void;
+  selectAnswerFromComparison: (cellKey: string, responseIndex: number) => void;
 }
 
 export interface ResolvedEntity {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, Grid, Card, Text, ScrollArea, Alert, Badge, Box, useMantineColorScheme } from '@mantine/core';
-import { useStore, CellDetails, Chunk } from '@config/store';
+import { useStore, CellDetails, Chunk, CellKey } from '@config/store';
 // Update import path
 import { formatReasoning, stringifyAnswer } from '@utils/formatting';
 
@@ -8,44 +8,54 @@ export function CompareAnswersModal() {
   // Get color scheme
   const { colorScheme } = useMantineColorScheme();
 
+  // Select necessary state and actions
   const {
     compareModalOpen,
     compareModalCellKey,
     closeCompareModal,
-    getTable
-  } = useStore(state => ({
-    compareModalOpen: state.compareModalOpen,
-    compareModalCellKey: state.compareModalCellKey,
-    closeCompareModal: state.closeCompareModal,
-    getTable: state.getTable // Need this to access cellDetails
-  }));
+    selectAnswerFromComparison,
+    // Select cellDetails directly based on the key
+    cellDetails 
+  } = useStore(state => {
+    const key = state.compareModalCellKey;
+    const table = key ? state.tables.find(t => t.id === state.activeTableId) : undefined;
+    // Find the specific cell details if key and table exist
+    const details = key && table ? table.cellDetails[key as keyof typeof table.cellDetails] : undefined; 
+    
+    return {
+      compareModalOpen: state.compareModalOpen,
+      compareModalCellKey: key,
+      closeCompareModal: state.closeCompareModal,
+      selectAnswerFromComparison: state.selectAnswerFromComparison,
+      cellDetails: details // Directly return the details object
+    };
+  });
 
-  // Get cell details based on the key from the active table
-  const cellDetails: CellDetails | undefined = React.useMemo(() => {
-    if (!compareModalCellKey) return undefined;
-    try {
-      const table = getTable(); // Get current table state
-      return table.cellDetails[compareModalCellKey];
-    } catch (error) {
-      console.error("Error getting table for compare modal:", error);
-      return undefined;
-    }
-  }, [compareModalCellKey, getTable]);
+  // No need for useMemo anymore, cellDetails comes directly from the store selector
+  // const cellDetails: CellDetails | undefined = React.useMemo(() => { ... }, [compareModalCellKey, getTable]);
 
-  // Prepare data for rendering
-  const currentAnswer = cellDetails?.answer?.answer;
+  // Prepare data for rendering (use cellDetails directly from store)
   const allResponses = cellDetails?.all_responses || [];
   const chunks = cellDetails?.chunks || [];
 
   // Filter valid responses (must have reasoning for this view)
-  const validResponses = (allResponses || []) // Ensure allResponses is an array
+  const validResponses = (allResponses || []) 
     .filter(
-      // Simplified filter: check for non-null object with reasoning
       resp => resp !== null && typeof resp === 'object' && resp.reasoning !== undefined 
     ) as NonNullable<CellDetails['all_responses']>[number][];
 
-  // Add logging to check the filter result
-  console.log('Filtered validResponses for Compare Modal:', validResponses);
+  // Handler for clicking a non-selected card
+  const handleCardClick = (responseIndex: number) => {
+    if (compareModalCellKey) {
+      selectAnswerFromComparison(compareModalCellKey, responseIndex);
+      // Optional: close modal after selection? 
+      // closeCompareModal(); 
+    }
+  };
+
+  // Add logging to check the filter result (useful for debugging)
+  console.log('Compare Modal - Cell Details from Store:', cellDetails);
+  console.log('Compare Modal - Filtered Valid Responses:', validResponses);
 
   return (
     <Modal
@@ -68,14 +78,9 @@ export function CompareAnswersModal() {
               // Add null check for safety
               if (!response) return null;
 
-              // Compare answer, reasoning, and citations to uniquely identify the selected response
-              const isCurrent = 
-                // Check the backend flag
-                response.is_selected_answer === true;
-              
-              // Calculate column span - show max 4 side-by-side
+              const isCurrent = response.is_selected_answer === true;
               const numCols = Math.min(validResponses.length, 4);
-              const span = Math.max(12 / numCols, 3); // Ensure minimum span of 3
+              const span = Math.max(12 / numCols, 3);
 
               return (
                 <Grid.Col span={span} key={index}>
@@ -84,11 +89,17 @@ export function CompareAnswersModal() {
                     padding="lg"
                     radius="md"
                     withBorder
-                    style={{
-                      borderColor: isCurrent ? 'var(--mantine-color-blue-filled)' : undefined,
+                    onClick={() => !isCurrent && handleCardClick(index)}
+                    style={theme => ({
+                      borderColor: isCurrent ? theme.colors.blue[6] : theme.colors.gray[3],
                       borderWidth: isCurrent ? '2px' : '1px',
-                      height: '100%' // Ensure cards in a row have same height
-                    }}
+                      height: '100%',
+                      cursor: isCurrent ? 'default' : 'pointer',
+                      transition: 'border-color 0.2s ease',
+                      '&:hover': !isCurrent ? {
+                        borderColor: theme.colors.blue[4]
+                      } : {}
+                    })}
                   >
                     {isCurrent && (
                       <Badge color="blue" variant="filled" style={{ position: 'absolute', top: '10px', right: '10px' }}>
@@ -110,9 +121,6 @@ export function CompareAnswersModal() {
                       p="xs" 
                       mb="sm" 
                       style={theme => ({ 
-                        // Remove border
-                        // border: `1px solid ${colorScheme === 'dark' ? theme.colors.dark[4] : theme.colors.gray[3]}`, 
-                        // Add background color for "well" effect
                         backgroundColor: colorScheme === 'dark' ? theme.colors.dark[5] : theme.colors.gray[0],
                         borderRadius: theme.radius.sm 
                       })}
