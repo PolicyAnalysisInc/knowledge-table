@@ -206,7 +206,9 @@ async def process_query(
         chunks=result_chunks,
         citations=citations,
         resolved_entities=resolved_entities_output,
-        reasoning=reasoning # Add reasoning here
+        reasoning=reasoning, # Add reasoning here
+        # Pass all_responses from llm_output
+        all_responses=llm_output.get("all_responses")
     )
 
 

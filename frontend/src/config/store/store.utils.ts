@@ -72,7 +72,8 @@ export function getBlankTable(name?: string): AnswerTable {
     openedChunks: [],
     citations: {},
     loadingCells: {},
-    uploadingFiles: false
+    uploadingFiles: false,
+    cellDetails: {},
   };
 }
 

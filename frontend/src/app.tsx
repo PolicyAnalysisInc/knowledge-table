@@ -8,7 +8,14 @@ import "@silevis/reactgrid/styles.css";
 import { queryClient } from "@config/query";
 import { useTheme } from "@config/theme";
 import { useStore } from "@config/store";
-import { KtTable, KTFileDrop, KtSwitch, KtControls } from "@components";
+import {
+  KtTable,
+  KTFileDrop,
+  KtSwitch,
+  KtControls,
+  DetailsModal,
+  CompareAnswersModal
+} from "@components";
 import "./app.css";
 
 export function App() {
@@ -28,6 +35,8 @@ export function App() {
           <KtControls mt="md" ml="md" />
           <KtTable mt="md" />
           <KTFileDrop />
+          <DetailsModal />
+          <CompareAnswersModal />
         </ModalsProvider>
       </MantineProvider>
     </QueryClientProvider>

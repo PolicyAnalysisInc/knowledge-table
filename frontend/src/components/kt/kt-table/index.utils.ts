@@ -50,6 +50,9 @@ export const handleContextMenu: Required<ReactGridProps>["onContextMenu"] = (
     c => `${c.rowId}-${c.columnId}`
   ).map(cell => mapValues(cell, String));
 
+  // Condition for showing cell-specific options (like Details)
+  const isSingleCellSelected = cells.length === 1 && isEmpty(rowIds) && isEmpty(colIds);
+
   return pack([
     !isEmpty(cells) &&
       isEmpty(rowIds) &&
@@ -68,6 +71,20 @@ export const handleContextMenu: Required<ReactGridProps>["onContextMenu"] = (
           id: "chunks",
           label: "View chunks",
           handler: () => store.openChunks(cells)
+        },
+        // Add Details option only if a single cell is selected
+        isSingleCellSelected && {
+          id: "details",
+          label: "Details",
+          // Pass the single cell location to the new store action
+          handler: () => store.openDetailsModal(cells[0])
+        },
+        // Add Compare Answers option only if a single cell is selected
+        isSingleCellSelected && {
+          id: "compare-answers",
+          label: "Compare Answers",
+          // Pass the single cell location to the new store action
+          handler: () => store.openCompareModal(cells[0])
         }
       ],
     ...options.filter(option => option.id !== "cut"),

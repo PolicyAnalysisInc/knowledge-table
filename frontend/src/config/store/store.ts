@@ -401,14 +401,17 @@ export const useStore = create<Store>()(
           if (shouldRunQuery) {
             // Inside runQuery.then callback in rerunCells:
             runQuery(row, column, globalRules)
-              .then(({ answer, chunks, resolvedEntities, citations }) => {
+              .then((queryResult) => {
+                // Edit the display cell value
                 editCells(
-                  [{ rowId: row.id, columnId: column.id, cell: answer.answer }],
+                  [{ rowId: row.id, columnId: column.id, cell: queryResult.answer.answer }],
                   activeTableId
                 );
 
                 // Get current state
                 const currentTable = getTable(activeTableId);
+                // Extract chunks, citations, resolvedEntities from the result for other updates
+                const { chunks, resolvedEntities, citations } = queryResult;
 
                 // Helper to check if an entity matches any global rule patterns
                 const isGlobalEntity = (entity: {
@@ -429,10 +432,13 @@ export const useStore = create<Store>()(
                   );
                 };
 
+                // Update chunks, citations, loading state, resolvedEntities, AND cellDetails
                 editTable(activeTableId, {
                   chunks: { ...currentTable.chunks, [key]: chunks },
                   citations: { ...currentTable.citations, [key]: citations },
                   loadingCells: omit(currentTable.loadingCells, key),
+                  // Add the full queryResult to cellDetails state
+                  cellDetails: { ...currentTable.cellDetails, [key]: queryResult },
                   columns: currentTable.columns.map(col => ({
                     ...col,
                     resolvedEntities: col.id === column.id
@@ -603,6 +609,46 @@ export const useStore = create<Store>()(
             globalRules: table.globalRules.map(rule => ({ ...rule, resolvedEntities: [] }))
           });
         }
+      },
+
+      // Add modal implementation
+      detailsModalOpen: false,
+      detailsModalCellData: null,
+
+      openDetailsModal: cell => {
+        const { getTable } = get();
+        const table = getTable();
+        // Construct the key
+        const key = getCellKey(cell.rowId, cell.columnId);
+        // Get data from cellDetails using the key
+        const cellData = table.cellDetails[key];
+
+        set({
+          detailsModalOpen: true,
+          // Pass the retrieved details or null
+          detailsModalCellData: cellData ?? null 
+        });
+      },
+
+      closeDetailsModal: () => {
+        set({
+          detailsModalOpen: false,
+          detailsModalCellData: null
+        });
+      },
+
+      // Add compare modal implementation
+      compareModalOpen: false,
+      compareModalCellKey: null,
+
+      openCompareModal: cell => {
+        const key = getCellKey(cell.rowId, cell.columnId);
+        // We only need the key, the modal will fetch details itself
+        set({ compareModalOpen: true, compareModalCellKey: key });
+      },
+
+      closeCompareModal: () => {
+        set({ compareModalOpen: false, compareModalCellKey: null });
       },
     }),
     {

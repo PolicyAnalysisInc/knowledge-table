@@ -33,6 +33,18 @@ class BaseResponseModel(BaseModel):
         description="Internal field used by MultiCompletionService to store all parallel responses."
     )
 
+    # Add flag to indicate if this response was the chosen one
+    is_selected_answer: Optional[bool] = Field(
+        default=False,
+        description="Indicates if this specific response was selected as the final answer by the judge."
+    )
+
+    # Add field for the model name that generated this response
+    model_name: Optional[str] = Field(
+        default=None,
+        description="The name of the language model that generated this specific response."
+    )
+
     @classmethod
     def validate_none(cls, v: Any) -> Optional[Any]:
         """Validate if the value is None or \"none\"."""

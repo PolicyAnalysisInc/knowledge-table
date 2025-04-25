@@ -42,6 +42,7 @@ async def test_generate_completion(pydantic_service):
     # No skip check needed as Agent is always patched
     class DummyResponseModel(BaseModel):
         content: str
+        model_name: str | None = None
 
     # Mock the response from agent.run to include the .output attribute
     mock_response_instance = DummyResponseModel(content="Test response")

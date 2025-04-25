@@ -4,8 +4,32 @@ from typing import Any, List, Optional, Union
 
 from pydantic import BaseModel, ConfigDict
 
+from app.models.llm_responses import (
+    BaseResponseModel,
+    BoolResponseModel,
+    IntArrayResponseModel,
+    IntResponseModel,
+    KeywordsResponseModel, # Keep if needed, or remove if not expected here
+    NumberArrayResponseModel,
+    NumberResponseModel,
+    SchemaResponseModel, # Keep if needed, or remove if not expected here
+    StrArrayResponseModel,
+    StrResponseModel,
+    SubQueriesResponseModel # Keep if needed, or remove if not expected here
+)
 from app.models.query_core import Chunk, FormatType, Rule
 
+# Define a Union of all possible concrete response types
+AnyResponseModel = Union[
+    BoolResponseModel,
+    IntArrayResponseModel,
+    IntResponseModel,
+    NumberArrayResponseModel,
+    NumberResponseModel,
+    StrArrayResponseModel,
+    StrResponseModel,
+    # Add others like KeywordsResponseModel if they can appear in all_responses
+]
 
 class ResolvedEntitySchema(BaseModel):
     """Schema for resolved entity transformations."""
@@ -24,6 +48,8 @@ class QueryPromptSchema(BaseModel):
     query: str
     type: FormatType
     rules: list[Rule] = []
+    reasoning: Optional[str] = None
+    all_responses: Optional[List[Optional[AnyResponseModel]]] = None
 
 
 class QueryRequestSchema(BaseModel):
@@ -51,6 +77,7 @@ class QueryResult(BaseModel):
     citations: List[int]
     resolved_entities: Optional[List[ResolvedEntitySchema]] = None
     reasoning: Optional[str] = None
+    all_responses: Optional[List[Optional[AnyResponseModel]]] = None
 
 
 class QueryResponseSchema(BaseModel):
@@ -62,8 +89,10 @@ class QueryResponseSchema(BaseModel):
     answer: Optional[Any] = None
     chunks: List[Chunk]
     type: str
-    citations: List[str]
+    citations: List[int]
     resolved_entities: Optional[List[ResolvedEntitySchema]] = None
+    reasoning: Optional[str] = None
+    all_responses: Optional[List[Optional[AnyResponseModel]]] = None
 
 
 class QueryAnswer(BaseModel):
@@ -74,6 +103,8 @@ class QueryAnswer(BaseModel):
     prompt_id: str
     answer: Optional[Union[int, float, str, bool, List[int], List[float], List[str]]]
     type: str
+    reasoning: Optional[str] = None
+    all_responses: Optional[List[Optional[AnyResponseModel]]] = None
 
 
 class QueryAnswerResponse(BaseModel):
@@ -84,6 +115,7 @@ class QueryAnswerResponse(BaseModel):
     citations: List[int]
     resolved_entities: Optional[List[ResolvedEntitySchema]] = None
     reasoning: Optional[str] = None
+    all_responses: Optional[List[Optional[AnyResponseModel]]] = None
 
 
 # Type for search responses (used in service layer)

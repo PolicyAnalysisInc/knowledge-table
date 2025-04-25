@@ -147,7 +147,7 @@ async def generate_response(
 
         if response is None:
             logger.warning("LLM returned None object")
-            return {"answer": None, "confidence": None, "reasoning": None, "citations": []}
+            return {"answer": None, "confidence": None, "reasoning": None, "citations": [], "all_responses": None}
 
         # Extract answer, confidence, reasoning, and citations
         answer = getattr(response, 'answer', None)
@@ -166,10 +166,18 @@ async def generate_response(
         citations = getattr(response, 'citations', [])
 
         logger.info(f"Processed response: answer={answer}, confidence={confidence}, reasoning={reasoning}, citations={citations}")
-        return {"answer": answer, "confidence": confidence, "reasoning": reasoning, "citations": citations}
+        # Include all_responses in the returned dictionary
+        return {
+            "answer": answer,
+            "confidence": confidence,
+            "reasoning": reasoning,
+            "citations": citations,
+            "all_responses": getattr(response, 'all_responses', None)
+        }
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}", exc_info=True)
-        return {"answer": None, "confidence": None, "reasoning": None, "citations": []}
+        # Ensure consistent return structure on error
+        return {"answer": None, "confidence": None, "reasoning": None, "citations": [], "all_responses": None}
 
 
 async def generate_inferred_response(
@@ -215,7 +223,7 @@ async def generate_inferred_response(
 
         if response is None:
             logger.warning("LLM returned None object")
-            return {"answer": None, "confidence": None, "reasoning": None, "citations": []}
+            return {"answer": None, "confidence": None, "reasoning": None, "citations": [], "all_responses": None}
 
         # Extract answer, confidence, reasoning, and citations
         answer = getattr(response, 'answer', None)
@@ -234,10 +242,18 @@ async def generate_inferred_response(
         citations = getattr(response, 'citations', [])
 
         logger.info(f"Processed inferred response: answer={answer}, confidence={confidence}, reasoning={reasoning}, citations={citations}")
-        return {"answer": answer, "confidence": confidence, "reasoning": reasoning, "citations": citations}
+        # Include all_responses in the returned dictionary
+        return {
+            "answer": answer,
+            "confidence": confidence,
+            "reasoning": reasoning,
+            "citations": citations,
+            "all_responses": getattr(response, 'all_responses', None)
+        }
     except Exception as e:
         logger.error(f"Error generating inferred response: {str(e)}", exc_info=True)
-        return {"answer": None, "confidence": None, "reasoning": None, "citations": []}
+        # Ensure consistent return structure on error
+        return {"answer": None, "confidence": None, "reasoning": None, "citations": [], "all_responses": None}
 
 
 async def get_keywords(

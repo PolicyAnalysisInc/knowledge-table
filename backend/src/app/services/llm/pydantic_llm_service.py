@@ -105,9 +105,12 @@ class PydanticCompletionService(CompletionService):
                  logger.error(f"Failed to convert agent result back to {response_model.__name__}: {conversion_e}", exc_info=True)
                  return None # Failed conversion means we can't return the required type
 
+            # Set the model name on the final result object
+            final_result.model_name = active_config.model_name
+
             # Check if all fields (excluding metadata/all_responses) in the *original* model are None
             # Need to re-evaluate this check logic if necessary
-            final_dump = final_result.model_dump(exclude={'all_responses'})
+            final_dump = final_result.model_dump(exclude={'all_responses', 'is_selected_answer', 'model_name'}) # Exclude metadata
             if all(value is None for value in final_dump.values()):
                  logger.info(f"All core fields in the {response_model.__name__} response model are None. Returning None.")
                  return None
@@ -359,10 +362,11 @@ class PydanticMultiCompletionService(PydanticCompletionService):
 
         # --- Finalize and Return ---
         if selected_response:
-            # Assign the full list of original results to the chosen response
-            # Ensure all_responses is serializable (contains models or None)
+            # Set the flag on the chosen response object
+            selected_response.is_selected_answer = True
+            # Assign the full list (which includes the flagged response) back
             selected_response.all_responses = all_results_list
-            logger.debug(f"Assigned 'all_responses' field to the chosen result. Selection reason: {selected_reason}")
+            logger.debug(f"Assigned 'all_responses' field and set 'is_selected_answer=True' on the chosen result. Selection reason: {selected_reason}")
             return selected_response
         else:
             # This case should ideally not be reached if num_successful > 0, but as a safeguard:

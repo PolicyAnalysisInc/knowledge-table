@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { answerSchema, documentSchema, chunkSchema } from "../api";
+import {
+  answerSchema,
+  documentSchema,
+  chunkSchema,
+  runQuery
+} from "../api";
+import { StateCreator } from "zustand";
 
 export interface Store {
   colorScheme: "light" | "dark";
@@ -52,6 +58,18 @@ export interface Store {
   applyFilters: () => void;
 
   clear: (allTables?: boolean) => void;
+
+  // Modal state and actions
+  detailsModalOpen: boolean;
+  detailsModalCellData: CellDetails | null;
+  openDetailsModal: (cell: { rowId: string; columnId: string }) => void;
+  closeDetailsModal: () => void;
+
+  // Compare Answers Modal state and actions
+  compareModalOpen: boolean;
+  compareModalCellKey: CellKey | null;
+  openCompareModal: (cell: { rowId: string; columnId: string }) => void;
+  closeCompareModal: () => void;
 }
 
 export interface ResolvedEntity {
@@ -77,6 +95,7 @@ export interface AnswerTable {
   citations: Record<CellKey, number[]>;
   loadingCells: Record<CellKey, true>;
   uploadingFiles: boolean;
+  cellDetails: Record<CellKey, CellDetails>;
 }
 
 export interface AnswerTableColumn {
@@ -126,3 +145,6 @@ export type CellKey = `${string}-${string}`;
 export type Document = z.infer<typeof documentSchema>;
 export type CellValue = z.infer<typeof answerSchema> | undefined;
 export type Chunk = z.infer<typeof chunkSchema>;
+
+// Define type for the full query result stored separately
+export type CellDetails = Awaited<ReturnType<typeof runQuery>>;

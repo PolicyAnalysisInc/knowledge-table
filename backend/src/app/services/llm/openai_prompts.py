@@ -3,15 +3,15 @@
 from string import Template
 
 # Shared confidence instruction snippet
-CONFIDENCE_INSTRUCTION = "- Include a `confidence` score (integer from 1 to 10, 1 being lowest confidence, 10 being highest) indicating how certain you are about the answer based *only* on the provided context."
-# Updated reasoning instruction to require inline citations
-REASONING_INSTRUCTION = "- Include a `reasoning` field (string) explaining the step-by-step process to arrive at your answer. **Crucially, whenever you use information from a specific chunk in the Context to support a statement in your reasoning, you MUST cite the chunk identifier (e.g., [chunk_0], [chunk_12]) immediately after the statement.** Base your reasoning strictly on the provided context."
-# Added citation instruction snippet
-CITATIONS_INSTRUCTION = """- Include a `citations` field (JSON array of **integers**) containing the unique 0-based integer indices corresponding to the chunks from the **Context** that you used to formulate the answer and reasoning. If no specific chunks were primarily used or the answer is null, this field should be exactly `null` or an empty list `[]`."""
+CONFIDENCE_INSTRUCTION = "- Include a `confidence` score (integer from 1 to 10, 1 being lowest confidence, 10 being highest) indicating how certain you are about the answer based *only* on the provided dontext."
+# Updated reasoning instruction to require specific inline citation format
+REASONING_INSTRUCTION = """- Include a `reasoning` field (string) explaining the step-by-step process to arrive at your answer. \n  **Citation Rules (Strictly Enforced)**:\n  1. **Every statement of fact** derived from the document MUST be cited.\n  2. The *only* way to reference specific information from the document is using citations.\n  3. Each citation MUST be in the format `[chunk_INDEX]`, where INDEX is the 0-based integer index of the chunk.\n  4. Place the citation *immediately* after the statement it supports. Do not group citations at the end of a sentence or paragraph.\n  5. If multiple chunks support the same statement, cite each one individually in separate brackets, e.g., `This is supported by [chunk_0][chunk_1]`.\n  6. DO NOT use the word "chunk" outside of the brackets. Do not refer to chunks narratively (e.g., 'as stated in the first chunk...' or 'chunk 5 says...'). Use only the `[chunk_INDEX]` format.\n  7. Base your reasoning strictly on the provided document.\n  **Examples**:\n    - **Bad**: "Chunk 0 and Chunk 23 list the authors." (Narrative reference, incorrect citation format)\n    - **Good**: "The authors are clearly listed [chunk_0][chunk_23]." (Correct citation format, immediately follows fact)\n    - **Bad**: "The study concluded that the treatment was effective, based on information found in chunks 3 and 7." (Uses the word 'chunk', groups citations)\n    - **Good**: "The treatment was found to be effective [chunk_3][chunk_7]." (Correct citation format)"""
+# Updated citation instruction for clarity
+CITATIONS_INSTRUCTION = """- Include a `citations` field (JSON array of **unique integers**) containing the 0-based indices corresponding to the chunks from the **Document** that you used to formulate the answer and reasoning. \n  - Only include indices of chunks *directly* used.\n  - If no specific chunks were primarily used or the answer is null, this field should be an empty list `[]`."""
 
 BASE_PROMPT = Template(
     """
-You are an expert assistant whose job is to answer the following question using **only** the information provided in the **Context**. Do not use any prior knowledge or external information.
+You are an expert assistant whose job is to answer the following question using **only** the information provided in the **Document**. Do not use any prior knowledge or external information.
 
 Your response MUST be a JSON object with four fields: 'answer', 'confidence', 'reasoning', and 'citations'.
 
@@ -21,7 +21,7 @@ Your response MUST be a JSON object with four fields: 'answer', 'confidence', 'r
 
 ---
 
-**Context**:
+**Document**:
 $chunks
 
 ---
@@ -30,10 +30,10 @@ $format_specific_instructions
 
 **Instructions**:
 
-- Provide your answer based strictly on the given context.
+- Provide your answer based strictly on the given document.
 - Be concise and accurate.
 - Do not include any introductory or concluding remarks.
-- If the answer is not present in the context, the 'answer' field should be exactly `null`.
+- If the answer is not present in the document, the 'answer' field should be exactly `null`.
 - Do not include JSON or any code inside strins in the response. Any string responses should be the most direct human readable answer.
 {confidence_instruction}
 {reasoning_instruction}
@@ -130,7 +130,7 @@ Your response MUST be a JSON object with two fields: 'keywords' and 'confidence'
 
 SIMILAR_KEYWORDS_PROMPT = Template(
     """
-You are tasked with finding additional keywords that are semantically similar to the provided keywords, using only the **Context** below.
+You are tasked with finding additional keywords that are semantically similar to the provided keywords, using only the **Document** below.
 
 Your response MUST be a JSON object with two fields: 'keywords' and 'confidence'.
 
@@ -140,7 +140,7 @@ Your response MUST be a JSON object with two fields: 'keywords' and 'confidence'
 
 ---
 
-**Context**:
+**Document**:
 $chunks
 
 ---
@@ -148,8 +148,8 @@ $chunks
 **Instructions**:
 
 - Provide the similar keywords as a JSON array of strings in the 'keywords' field.
-- Only include words that are present in the context and are semantically related to the provided keywords.
-- If you cannot find any similar keywords in the context, the 'keywords' field should be exactly `null`.
+- Only include words that are present in the document and are semantically related to the provided keywords.
+- If you cannot find any similar keywords in the document, the 'keywords' field should be exactly `null`.
 - Do not include any additional text or explanation in the 'keywords' field.
 {confidence_instruction}
 
@@ -215,7 +215,7 @@ JUDGE_RESPONSE_PROMPT = Template(
     """
 You are an expert evaluator. Your task is to analyze multiple responses generated for the same query and select the single best response based on accuracy, completeness, adherence to instructions (if any implied by the query), reasoning quality, and confidence score.
 
-Original Query (including context/chunks):
+Original Query (including document/chunks):
 ---
 $original_query
 ---
@@ -227,8 +227,8 @@ $candidate_responses_json
 
 Instructions:
 1. Review each candidate response carefully.
-2. Compare them against the original query, paying close attention to the context/chunks provided within the query.
-3. Evaluate them based on accuracy, reasoning, and confidence **relative to the provided context**.
+2. Compare them against the original query, paying close attention to the document/chunks provided within the query.
+3. Evaluate them based on accuracy, reasoning, and confidence **relative to the provided document**.
 4. Choose the index (the 'index' field in the JSON above) of the single best response.
 5. Respond with a JSON object containing ONLY the field 'answer', which MUST be the 0-based index of the best response you selected.
 

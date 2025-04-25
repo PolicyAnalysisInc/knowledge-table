@@ -88,7 +88,8 @@ async def run_query(
             chunks=query_response.chunks,
             citations=query_response.citations,
             resolved_entities=query_response.resolved_entities,
-            reasoning=query_response.reasoning
+            reasoning=query_response.reasoning,
+            all_responses=query_response.all_responses,
         )
 
         return response_data
@@ -138,7 +139,8 @@ async def run_query(
             chunks=query_response.chunks,
             citations=query_response.citations,
             resolved_entities=query_response.resolved_entities,
-            reasoning=query_response.reasoning
+            reasoning=query_response.reasoning,
+            all_responses=query_response.all_responses,
         )
 
         return response_data
